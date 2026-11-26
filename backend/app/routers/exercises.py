@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import distinct_on
 
 from app.auth import DB, CurrentUser
 from app.models import Exercise, LogEntry
@@ -20,7 +21,7 @@ def recent_exercises(user: CurrentUser, db: DB, limit: int = 8) -> list[RecentEx
     """Exercises this user logged most recently, each with its latest entry."""
     latest = (
         select(LogEntry.id)
-        .distinct(LogEntry.exercise_id)
+        .ext(distinct_on(LogEntry.exercise_id))
         .where(LogEntry.user_id == user.id)
         .order_by(LogEntry.exercise_id, LogEntry.performed_at.desc(), LogEntry.id.desc())
         .subquery()

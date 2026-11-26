@@ -68,7 +68,9 @@ def signed_in(client, outbox):
 
     def sign_in(email="lifter@example.com"):
         assert client.post("/api/auth/request-code", json={"email": email}).status_code == 200
-        res = client.post("/api/auth/verify", json={"email": email, "code": outbox[email]})
+        # Codes are sent to the normalized address.
+        code = outbox[email.strip().lower()]
+        res = client.post("/api/auth/verify", json={"email": email, "code": code})
         assert res.status_code == 200, res.text
         return {"Authorization": f"Bearer {res.json()['token']}"}
 
