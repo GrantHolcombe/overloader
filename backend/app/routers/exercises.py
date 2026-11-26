@@ -4,7 +4,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 
 from app.auth import DB, CurrentUser
 from app.models import Exercise, LogEntry
-from app.schemas import ExerciseOut, LogIn, LogOut, RecentExercise
+from app.schemas import ExerciseOut, LogIn, LogOut, LogUpdate, RecentExercise
 
 router = APIRouter(prefix="/api", tags=["exercises"])
 
@@ -78,6 +78,21 @@ def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB) -> LogOut:
     if body.performed_at is not None:
         entry.performed_at = body.performed_at
     db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return LogOut.model_validate(entry)
+
+
+@router.patch("/logs/{log_id}")
+def update_log(log_id: int, body: LogUpdate, user: CurrentUser, db: DB) -> LogOut:
+    """Fixes a typo or moves an entry to another date. Only the fields sent change."""
+    entry = db.scalar(select(LogEntry).where(LogEntry.id == log_id, LogEntry.user_id == user.id))
+    if entry is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such log entry")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if value is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{field} can't be empty")
+        setattr(entry, field, value)
     db.commit()
     db.refresh(entry)
     return LogOut.model_validate(entry)

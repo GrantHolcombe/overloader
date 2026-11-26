@@ -32,9 +32,17 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Code entry** (`components/CodeInput.vue`, ported from Setups.Bike): one box per digit.
   Typing advances, Backspace on an empty box goes back, and a paste or the phone's one-time-code
   suggestion fills every box. Filling the last box submits.
-- **Confirm dialog** (`components/ConfirmDialog.vue`): the only modal. Never use the browser's
-  `confirm()` or `alert()`. Built on `<dialog>.showModal()` (focus trap, Escape and backdrop tap
-  cancel). Focus starts on Cancel; destructive actions use `danger` (`.btn-danger`) and say
-  they can't be undone.
+- **Modals** are all built on `components/AppModal.vue` (`<dialog>.showModal()`: focus trap,
+  Escape and backdrop tap close; title, body slot, two-button `actions` slot). Never use the
+  browser's `confirm()` or `alert()`.
+  - `ConfirmDialog.vue` for yes/no. Focus starts on Cancel; destructive actions use `danger`
+    (`.btn-danger`) and say they can't be undone.
+  - `EditEntryDialog.vue` for editing a log entry. Steppers stack one per row inside a modal,
+    since two side by side leave the number box too narrow at phone width.
+- **Dates:** a native `<input type="date">` with `max` set to today (no future entries). The
+  primary button names a non-today date ("Log for Fri, Nov 20"), and a ghost "Today" button
+  resets it.
+- **Tap to edit:** history rows are buttons that open the edit dialog; the row's detail line
+  says "tap to edit".
 - **Feedback:** errors in `.error` with `role="alert"`; success as a short `.toast`
   (`role="status"`).

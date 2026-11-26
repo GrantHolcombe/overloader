@@ -72,7 +72,13 @@ export const api = {
   exercise: (id: number) => request<Exercise>(`/api/exercises/${id}`),
   recent: () => request<RecentExercise[]>("/api/exercises/recent"),
   logs: (exerciseId: number) => request<LogEntry[]>(`/api/exercises/${exerciseId}/logs`),
-  addLog: (exerciseId: number, body: { weight: number; reps: number; sets: number }) =>
-    request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body }),
+  addLog: (
+    exerciseId: number,
+    body: { weight: number; reps: number; sets: number; performed_at?: string },
+  ) => request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body }),
+  updateLog: (
+    id: number,
+    body: Partial<Pick<LogEntry, "weight" | "reps" | "sets" | "unit" | "performed_at">>,
+  ) => request<LogEntry>(`/api/logs/${id}`, { method: "PATCH", body }),
   deleteLog: (id: number) => request<void>(`/api/logs/${id}`, { method: "DELETE" }),
 };

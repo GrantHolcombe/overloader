@@ -16,7 +16,7 @@ The live task list is the private GitHub Project board. This page is the overvie
 - Custom exercises (per user)
 - Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
 - Personal-record badges and "beat last time" nudges
-- Edit an entry; log a past date
+- [x] Edit an entry; log a past date (2026-11-26)
 - Offline logging queue (save at the rack, sync when signal returns)
 
 ## Phase 2: Ship it

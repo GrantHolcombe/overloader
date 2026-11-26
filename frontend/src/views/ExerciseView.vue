@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import EditEntryDialog, { type EntryPatch } from "../components/EditEntryDialog.vue";
 import Stepper from "../components/Stepper.vue";
 import { api, type Exercise } from "../lib/api";
 import {
+  atDay,
   convert,
   dayKey,
+  formatDay,
   formatEntry,
   relativeDay,
+  today,
   weightStep,
   type LogEntry,
 } from "../lib/lifting";
@@ -25,6 +29,17 @@ const unit = computed(() => session.user?.unit ?? "lb");
 const weight = ref(0);
 const reps = ref(8);
 const sets = ref(3);
+// The day this entry is for. Stays put after logging, so backfilling a past workout is quick;
+// a page reload starts from today again.
+const logDay = ref(today());
+const isToday = computed(() => logDay.value === today());
+
+// Newest first, the order the API returns.
+function sortLogs(list: LogEntry[]) {
+  return [...list].sort(
+    (a, b) => b.performed_at.localeCompare(a.performed_at) || b.id - a.id,
+  );
+}
 
 const last = computed(() => logs.value[0]);
 
@@ -68,9 +83,10 @@ async function save() {
       weight: weight.value,
       reps: reps.value,
       sets: sets.value,
+      ...(isToday.value ? {} : { performed_at: atDay(logDay.value) }),
     });
-    logs.value = [entry, ...logs.value];
-    showToast("Logged");
+    logs.value = sortLogs([entry, ...logs.value]);
+    showToast(isToday.value ? "Logged" : `Logged for ${formatDay(logDay.value)}`);
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -95,6 +111,27 @@ async function confirmDelete() {
   } finally {
     deleting.value = false;
     pendingDelete.value = null;
+  }
+}
+
+const editing = ref<LogEntry | null>(null);
+const savingEdit = ref(false);
+
+async function saveEdit(patch: EntryPatch) {
+  const entry = editing.value;
+  if (!entry) return;
+  error.value = "";
+  savingEdit.value = true;
+  try {
+    const updated = await api.updateLog(entry.id, patch);
+    logs.value = sortLogs(logs.value.map((l) => (l.id === updated.id ? updated : l)));
+    editing.value = null;
+    showToast("Saved");
+  } catch (e) {
+    error.value = (e as Error).message;
+    editing.value = null;
+  } finally {
+    savingEdit.value = false;
   }
 }
 
@@ -137,8 +174,15 @@ const time = (iso: string) =>
         <Stepper v-model="reps" label="Reps" :min="1" :max="1000" />
         <Stepper v-model="sets" label="Sets" :min="1" :max="100" />
       </div>
-      <button class="btn btn-primary btn-block" :disabled="saving">
-        {{ saving ? "Saving…" : "Log it" }}
+      <div class="date-row">
+        <label class="label" for="log-day">Date</label>
+        <input id="log-day" v-model="logDay" class="input" type="date" :max="today()" required />
+        <button v-if="!isToday" type="button" class="btn btn-ghost" @click="logDay = today()">
+          Today
+        </button>
+      </div>
+      <button class="btn btn-primary btn-block" :disabled="saving || !logDay">
+        {{ saving ? "Saving…" : isToday ? "Log it" : `Log for ${formatDay(logDay)}` }}
       </button>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
@@ -158,10 +202,15 @@ const time = (iso: string) =>
         <h3 class="muted">{{ group.label }}</h3>
         <ul class="list">
           <li v-for="entry in group.entries" :key="entry.id" class="list-row">
-            <span class="grow">
+            <button
+              type="button"
+              class="grow edit"
+              :aria-label="`Edit ${formatEntry(entry)}`"
+              @click="editing = entry"
+            >
               {{ formatEntry(entry) }}
-              <small>{{ time(entry.performed_at) }}</small>
-            </span>
+              <small>{{ time(entry.performed_at) }} · tap to edit</small>
+            </button>
             <button
               class="btn btn-ghost icon-btn"
               :aria-label="`Delete ${formatEntry(entry)}`"
@@ -189,6 +238,13 @@ const time = (iso: string) =>
         This can't be undone.
       </template>
     </ConfirmDialog>
+
+    <EditEntryDialog
+      :entry="editing"
+      :busy="savingEdit"
+      @save="saveEdit"
+      @cancel="editing = null"
+    />
 
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
   </main>
@@ -219,6 +275,29 @@ const time = (iso: string) =>
   color: var(--text);
   font-size: 1.1rem;
   margin-bottom: 2px;
+}
+.date-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+}
+.date-row .label {
+  grid-column: 1 / -1;
+}
+.edit {
+  all: unset;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.edit:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 .day h3 {
   font-size: 0.9rem;

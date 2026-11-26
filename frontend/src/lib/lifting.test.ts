@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  atDay,
   convert,
+  dayKey,
+  today,
   dailySeries,
   estimatedOneRepMax,
   matches,
@@ -70,6 +73,20 @@ describe("search", () => {
   });
   it("treats hyphens as spaces", () => {
     expect(matches("pull up", { name: "Pull-Up", equipment: "Bodyweight", muscle_group: "Back" })).toBe(true);
+  });
+});
+
+describe("dates", () => {
+  it("puts a picked day at the given time of day, in local time", () => {
+    const time = new Date("2026-11-26T19:45:00");
+    const iso = atDay("2026-11-20", time);
+    const d = new Date(iso);
+    expect([d.getFullYear(), d.getMonth() + 1, d.getDate()]).toEqual([2026, 11, 20]);
+    expect([d.getHours(), d.getMinutes()]).toEqual([19, 45]);
+    expect(dayKey(iso)).toBe("2026-11-20");
+  });
+  it("gives today as a date-input value", () => {
+    expect(today(new Date("2026-11-26T23:30:00"))).toBe("2026-11-26");
   });
 });
 

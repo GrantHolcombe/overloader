@@ -46,6 +46,30 @@ export function dayKey(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Today as YYYY-MM-DD in local time, for a date input's value and max. */
+export function today(now = new Date()): string {
+  return dayKey(now.toISOString());
+}
+
+/**
+ * The moment to store for a date picked in a date input: that local day, at the time of day
+ * taken from `timeFrom` (now for a new entry, the entry's own time when moving one).
+ */
+export function atDay(day: string, timeFrom: Date = new Date()): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  const moment = new Date(timeFrom);
+  moment.setFullYear(y, m - 1, d);
+  return moment.toISOString();
+}
+
+export function formatDay(day: string): string {
+  return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export interface DayPoint {
   day: string;
   value: number;
