@@ -55,6 +55,11 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
   beating last time, orange border and title when the lift would be a new PR. History rows that
   set a record get a "PR" `.tag` and list which records; a new PR shows an orange `.toast.pr`
   for 3.5 s instead of the green "Logged".
+- **Day view:** "View a day" next to the Recent heading switches it to one day (heading shows
+  the day; date field plus ‹ › arrows, › disabled on today; "Back to recent" returns). The day is
+  in the URL (`/?day=2026-11-21`), and the exercise page's ‹ goes *back* rather than home, so
+  leaving an exercise returns to the same day. Use `hide-label` on a DateField when a heading
+  already names it (`.sr-only` keeps it for screen readers).
 - **Tap to edit:** history rows are buttons that open the edit dialog; the row's detail line
   says "tap to edit".
 - **Feedback:** errors in `.error` with `role="alert"`; success as a short `.toast`

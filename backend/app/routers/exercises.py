@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, HTTPException, status
+from pydantic import AwareDatetime
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on
 
@@ -12,6 +15,7 @@ from app.schemas import (
     LogIn,
     LogOut,
     LogUpdate,
+    LogWithExercise,
     RecentExercise,
 )
 
@@ -167,6 +171,34 @@ def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB) -> LogOut:
     db.commit()
     db.refresh(entry)
     return LogOut.model_validate(entry)
+
+
+MAX_RANGE = timedelta(days=62)
+
+
+@router.get("/logs")
+def logs_in_range(
+    start: AwareDatetime, end: AwareDatetime, user: CurrentUser, db: DB
+) -> list[LogWithExercise]:
+    """This user's entries with start <= performed_at < end, oldest first, each with its exercise.
+
+    The app sends the start and end of a day in the user's own time zone (the server doesn't
+    know it), so "Friday" means their Friday.
+    """
+    if end <= start:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "end must be after start")
+    if end - start > MAX_RANGE:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Range is too long")
+    rows = db.scalars(
+        select(LogEntry)
+        .where(
+            LogEntry.user_id == user.id,
+            LogEntry.performed_at >= start,
+            LogEntry.performed_at < end,
+        )
+        .order_by(LogEntry.performed_at, LogEntry.id)
+    )
+    return [LogWithExercise.model_validate(r) for r in rows]
 
 
 @router.patch("/logs/{log_id}")

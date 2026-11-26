@@ -5,7 +5,10 @@
 import { ref } from "vue";
 import { today } from "../lib/lifting";
 
-defineProps<{ id: string; label: string }>();
+// hideLabel keeps the label for screen readers when a heading nearby already says what it is.
+withDefaults(defineProps<{ id: string; label: string; hideLabel?: boolean }>(), {
+  hideLabel: false,
+});
 const model = defineModel<string>({ required: true });
 const clamped = ref(false);
 
@@ -26,7 +29,7 @@ function onChange(event: Event) {
 
 <template>
   <div class="date-field">
-    <label class="label" :for="id">{{ label }}</label>
+    <label :class="hideLabel ? 'sr-only' : 'label'" :for="id">{{ label }}</label>
     <div class="row">
       <input
         :id="id"

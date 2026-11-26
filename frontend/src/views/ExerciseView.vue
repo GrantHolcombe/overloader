@@ -30,6 +30,13 @@ import { session } from "../lib/session";
 const props = defineProps<{ id: number }>();
 const router = useRouter();
 
+// Back to wherever this was opened from (the home screen, a day view, search), or home when
+// the page was opened directly.
+function goBack() {
+  if (router.options.history.state.back) router.back();
+  else router.push("/");
+}
+
 const exercise = ref<Exercise>();
 const logs = ref<LogEntry[]>([]);
 const error = ref("");
@@ -228,7 +235,7 @@ const time = (iso: string) =>
 <template>
   <main>
     <header class="topbar">
-      <RouterLink to="/" class="btn btn-ghost icon-btn" aria-label="Back to exercises">‹</RouterLink>
+      <button type="button" class="btn btn-ghost icon-btn" aria-label="Back" @click="goBack">‹</button>
       <h1>{{ exercise?.name ?? "…" }}</h1>
       <button
         v-if="exercise?.custom"

@@ -62,6 +62,18 @@ export function atDay(day: string, timeFrom: Date = new Date()): string {
   return moment.toISOString();
 }
 
+/** Local midnight at the start of a day and of the next one, as ISO timestamps. */
+export function dayRange(day: string): [string, string] {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return [new Date(y, m - 1, d).toISOString(), new Date(y, m - 1, d + 1).toISOString()];
+}
+
+/** The day `n` days after (or before, if negative) a YYYY-MM-DD day. */
+export function shiftDay(day: string, n: number): string {
+  const [y, m, d] = day.split("-").map(Number) as [number, number, number];
+  return dayKey(new Date(y, m - 1, d + n, 12).toISOString());
+}
+
 export function formatDay(day: string): string {
   return new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
     weekday: "short",
@@ -98,6 +110,11 @@ export function weightStep(unit: Unit): number {
 export function formatWeight(weight: number, unit: Unit): string {
   const rounded = Math.round(weight * 100) / 100;
   return `${rounded.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${unit}`;
+}
+
+/** Compact form for lists that show several entries on one line: "105 lb × 8 × 3". */
+export function formatShort(e: LogEntry): string {
+  return `${formatWeight(e.weight, e.unit)} × ${e.reps} × ${e.sets}`;
 }
 
 export function formatEntry(e: LogEntry): string {

@@ -90,6 +90,11 @@ export const api = {
     request<Exercise>(`/api/exercises/${id}`, { method: "PATCH", body }),
   deleteExercise: (id: number) => request<void>(`/api/exercises/${id}`, { method: "DELETE" }),
   recent: () => request<RecentExercise[]>("/api/exercises/recent"),
+  /** Entries with start <= performed_at < end, oldest first (a local day: see dayRange). */
+  logsBetween: (start: string, end: string) =>
+    request<(LogEntry & { exercise: Exercise })[]>(
+      `/api/logs?${new URLSearchParams({ start, end })}`,
+    ),
   logs: (exerciseId: number) => request<LogEntry[]>(`/api/exercises/${exerciseId}/logs`),
   addLog: (
     exerciseId: number,

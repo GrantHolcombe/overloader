@@ -121,6 +121,10 @@ class LogOut(BaseModel):
     performed_at: datetime
 
 
+class LogWithExercise(LogOut):
+    exercise: ExerciseOut
+
+
 class RecentExercise(BaseModel):
     exercise: ExerciseOut
     last: LogOut

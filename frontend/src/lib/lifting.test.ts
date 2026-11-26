@@ -4,7 +4,9 @@ import {
   compareToLast,
   convert,
   dayKey,
+  dayRange,
   describeDiff,
+  shiftDay,
   entryBefore,
   personalRecords,
   today,
@@ -89,6 +91,15 @@ describe("dates", () => {
     expect([d.getFullYear(), d.getMonth() + 1, d.getDate()]).toEqual([2026, 11, 20]);
     expect([d.getHours(), d.getMinutes()]).toEqual([19, 45]);
     expect(dayKey(iso)).toBe("2026-11-20");
+  });
+  it("gives a local day's start and end, and steps across month ends", () => {
+    const [start, end] = dayRange("2026-11-30");
+    expect(new Date(start).getDate()).toBe(30);
+    expect(new Date(start).getHours()).toBe(0);
+    expect(new Date(end).getDate()).toBe(1);
+    expect(new Date(end).getTime() - new Date(start).getTime()).toBeGreaterThan(22 * 3600e3);
+    expect(shiftDay("2026-11-30", 1)).toBe("2026-12-01");
+    expect(shiftDay("2026-03-01", -1)).toBe("2026-02-28");
   });
   it("gives today as a date-input value", () => {
     expect(today(new Date("2026-11-26T23:30:00"))).toBe("2026-11-26");

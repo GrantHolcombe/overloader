@@ -18,7 +18,7 @@ The live task list is the private GitHub Project board. This page is the overvie
       never deleted.
 - Merge two catalog exercises (move everyone's logs, retire the duplicate)
 - "Suggest for everyone": promote a popular custom exercise into the catalog
-- View logs from a specific day in the Recent area (free)
+- [x] View logs from a specific day in the Recent area (free, 2026-11-26)
 - Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro)
 - Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
 - [x] Personal-record badges and "beat last time" nudges (2026-11-26)
