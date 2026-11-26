@@ -3,9 +3,12 @@
 // trapping, Escape to close and an inert page behind it for free.
 import { ref, watch } from "vue";
 
-const props = withDefaults(defineProps<{ open: boolean; title: string; busy?: boolean }>(), {
-  busy: false,
-});
+// placement "top" is for modals with a text field: the phone keyboard covers the bottom half
+// of the screen, so a centered dialog would hide what's being typed.
+const props = withDefaults(
+  defineProps<{ open: boolean; title: string; busy?: boolean; placement?: "center" | "top" }>(),
+  { busy: false, placement: "center" },
+);
 const emit = defineEmits<{ close: [] }>();
 
 const dialog = ref<HTMLDialogElement>();
@@ -30,6 +33,7 @@ function onClick(event: MouseEvent) {
   <dialog
     ref="dialog"
     class="modal"
+    :class="{ top: placement === 'top' }"
     :aria-labelledby="titleId"
     @cancel.prevent="!busy && emit('close')"
     @click="onClick"
@@ -50,6 +54,9 @@ function onClick(event: MouseEvent) {
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
+}
+.modal.top {
+  margin-top: max(16px, env(safe-area-inset-top));
 }
 .modal::backdrop {
   background: rgb(0 0 0 / 0.6);

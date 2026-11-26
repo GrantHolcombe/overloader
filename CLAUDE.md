@@ -8,6 +8,9 @@
   Vite dev server proxies `/api` to the API, so local dev needs no CORS.
 - Schema changes are Alembic migrations in `backend/migrations/versions/`; keep
   `backend/app/models.py` in step and update `docs/DATABASE.md` in the same change.
+- The standard exercise list is `backend/catalog/exercises.csv`, not a migration. After
+  `alembic upgrade head`, run `python -m app.catalog` (dry run) then `--apply`. Never delete a
+  catalog row from the database; the sync retires it.
 - Before pushing: `ruff check . && ruff format --check . && pytest` in `backend/` (pytest needs
   `TEST_DATABASE_URL`, a database it may wipe) and `npm test && npm run build` in `frontend/`.
   CI (`.github/workflows/checks.yml`) runs the same.

@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://localhost/overloader"
     jwt_secret: str = "dev-only-change-me"
     token_days: int = 30
+    # Max custom exercises per user; unset means no limit. The Pro plan will set this per plan
+    # (free: 5); until billing exists everyone is unlimited.
+    custom_exercise_limit: int | None = None
     resend_api_key: str | None = None
     signin_email_from: str = "Overloader <signin@example.com>"
     # Comma-separated. The Vite dev server proxies /api, so this only matters once the

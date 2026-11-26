@@ -26,6 +26,26 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-26: Personal custom exercises, and a catalog I can edit as feedback comes in
+
+**Situation:** Before starting custom exercises, I checked two things: whether they'd be shared
+with other users, and whether the standard exercise list would be easy to change once real users
+start asking for additions and removals.
+
+**Decision:**
+- **Custom exercises are personal,** visible only to the person who made them. Shared ones would
+  need moderation (duplicates, typos, worse), and people name their own gym's machines.
+- **The standard list became one CSV file** with a sync command, instead of a new migration for
+  every change. My question exposed a gap: removing an exercise wasn't safe, because logs point
+  at it. So removed exercises are now *retired* (hidden, history kept), and renames carry
+  everyone's history with them. Merging duplicates is a board card for when feedback calls for
+  it.
+
+**Why:** The catalog will change based on what users ask for, so updating it has to be routine,
+and it must never cost anyone their training history.
+
+---
+
 ## 2026-11-26: Freemium, and where the paywall goes
 
 **Situation:** Before Phase 1, I decided Overloader should make money the same way Setups.Bike

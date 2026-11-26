@@ -10,6 +10,7 @@ from sqlalchemy import (
     Numeric,
     String,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -45,12 +46,43 @@ class EmailLoginCode(Base):
 
 
 class Exercise(Base):
+    """A catalog exercise (user_id NULL, managed from catalog/exercises.csv) or a custom one
+    that belongs to a single user."""
+
     __tablename__ = "exercise"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(80), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
     equipment: Mapped[str] = mapped_column(String(20))
     muscle_group: Mapped[str] = mapped_column(String(20))
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("app_user.id", ondelete="CASCADE"), index=True
+    )
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index(
+            "exercise_catalog_name",
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("user_id IS NULL"),
+        ),
+        Index(
+            "exercise_user_name",
+            user_id,
+            func.lower(name),
+            unique=True,
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
+    )
+
+    @property
+    def custom(self) -> bool:
+        return self.user_id is not None
+
+    @property
+    def retired(self) -> bool:
+        return self.retired_at is not None
 
 
 class LogEntry(Base):

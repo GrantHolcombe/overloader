@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { api, type Exercise, type RecentExercise } from "../lib/api";
+import { useRouter } from "vue-router";
+import ExerciseFormDialog from "../components/ExerciseFormDialog.vue";
+import { api, type Exercise, type ExerciseFields, type RecentExercise } from "../lib/api";
 import { formatEntry, matches, relativeDay } from "../lib/lifting";
+
+const router = useRouter();
+// The filter chip that shows only your own exercises (not an equipment type).
+const CUSTOM = "Custom";
 
 const exercises = ref<Exercise[]>([]);
 const recent = ref<RecentExercise[]>([]);
@@ -20,13 +26,41 @@ onMounted(async () => {
   }
 });
 
-const equipmentTypes = computed(() => [...new Set(exercises.value.map((e) => e.equipment))].sort());
+const equipmentTypes = computed(() => {
+  const types = [...new Set(exercises.value.map((e) => e.equipment))].sort();
+  return exercises.value.some((e) => e.custom) ? [CUSTOM, ...types] : types;
+});
 
 const results = computed(() =>
-  exercises.value.filter(
-    (e) => (!equipment.value || e.equipment === equipment.value) && matches(query.value, e),
-  ),
+  exercises.value.filter((e) => {
+    const filter = equipment.value;
+    const passes = !filter || (filter === CUSTOM ? e.custom : e.equipment === filter);
+    return passes && matches(query.value, e);
+  }),
 );
+
+const creating = ref(false);
+const saving = ref(false);
+const formError = ref("");
+
+function openCreate() {
+  formError.value = "";
+  creating.value = true;
+}
+
+async function create(fields: ExerciseFields) {
+  formError.value = "";
+  saving.value = true;
+  try {
+    const exercise = await api.createExercise(fields);
+    creating.value = false;
+    router.push(`/exercise/${exercise.id}`);
+  } catch (e) {
+    formError.value = (e as Error).message;
+  } finally {
+    saving.value = false;
+  }
+}
 
 const searching = computed(() => query.value.trim() !== "" || equipment.value !== null);
 
@@ -69,6 +103,9 @@ function toggleEquipment(type: string) {
         {{ type }}
       </button>
     </div>
+    <button type="button" class="btn btn-ghost add" @click="openCreate">
+      + New custom exercise
+    </button>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-else-if="loading" class="muted">Loading…</p>
@@ -95,13 +132,50 @@ function toggleEquipment(type: string) {
           <RouterLink :to="`/exercise/${e.id}`" class="list-row">
             <span class="grow">
               {{ e.name }}
-              <small>{{ e.equipment }} · {{ e.muscle_group }}</small>
+              <small><span v-if="e.custom" class="tag">Custom</span>{{ e.equipment }} · {{ e.muscle_group }}</small>
             </span>
             <span aria-hidden="true" class="muted">›</span>
           </RouterLink>
         </li>
       </ul>
-      <p v-else class="muted">Nothing matches "{{ query }}". Try fewer words.</p>
+      <div v-else class="empty">
+        <p class="muted">Nothing matches "{{ query }}". Try fewer words, or add it yourself.</p>
+        <button v-if="query.trim()" type="button" class="btn btn-block" @click="openCreate">
+          Add "{{ query.trim() }}" as a custom exercise
+        </button>
+      </div>
     </template>
+
+    <ExerciseFormDialog
+      :open="creating"
+      :initial-name="query"
+      :busy="saving"
+      :error="formError"
+      @save="create"
+      @cancel="creating = false"
+    />
   </main>
 </template>
+
+<style scoped>
+.add {
+  margin-top: 4px;
+  padding: 0 4px;
+  min-height: 44px;
+  color: var(--accent);
+}
+.tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.empty p {
+  margin: 0 0 10px;
+}
+</style>

@@ -23,7 +23,9 @@ from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
+from app.catalog import read_catalog, sync  # noqa: E402
 from app.db import get_engine  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -36,15 +38,32 @@ def migrated():
     )
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
+    reset_catalog()
+
+
+def reset_catalog():
+    """Puts the catalog back to exactly catalog/exercises.csv (tests may add or retire rows)."""
+    names = [n.lower() for n, _, _ in read_catalog()[0]]
+    with get_engine().begin() as conn:
+        conn.execute(
+            text("DELETE FROM exercise WHERE user_id IS NULL AND NOT (lower(name) = ANY(:names))"),
+            {"names": names},
+        )
+    with Session(get_engine()) as db:
+        sync(db, write=True)
 
 
 @pytest.fixture(autouse=True)
 def clean_db():
     yield
     with get_engine().begin() as conn:
-        conn.execute(
-            text("TRUNCATE log_entry, email_login_code, app_user RESTART IDENTITY CASCADE")
-        )
+        # Not TRUNCATE ... CASCADE: exercise references app_user, so that would empty the
+        # whole catalog too.
+        conn.execute(text("DELETE FROM log_entry"))
+        conn.execute(text("DELETE FROM exercise WHERE user_id IS NOT NULL"))
+        conn.execute(text("DELETE FROM email_login_code"))
+        conn.execute(text("DELETE FROM app_user"))
+    reset_catalog()
 
 
 @pytest.fixture

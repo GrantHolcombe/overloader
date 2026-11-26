@@ -37,6 +37,8 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
   browser's `confirm()` or `alert()`.
   - `ConfirmDialog.vue` for yes/no. Focus starts on Cancel; destructive actions use `danger`
     (`.btn-danger`) and say they can't be undone.
+  - Modals with a text field use `placement="top"` so the phone keyboard doesn't cover it
+    (`ExerciseFormDialog.vue`, which creates/edits custom exercises).
   - `EditEntryDialog.vue` for editing a log entry. Steppers stack one per row inside a modal,
     since two side by side leave the number box too narrow at phone width.
 - **Dates:** `components/DateField.vue`, a native date input that never allows a day after
@@ -44,6 +46,9 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
   future pick snaps back to today with a short note. It also undoes iOS's wide intrinsic width
   (`appearance: none; min-width: 0`), which pushed the picker off narrow dialogs. The primary
   button names a non-today date ("Log for Fri, Nov 20"), and a ghost "Today" button resets it.
+- **Custom exercises** show a small accent `.tag` ("Custom") before their detail line, a
+  "Custom" filter chip appears first once you have one, and an empty search offers to add the
+  query as a custom exercise.
 - **Tap to edit:** history rows are buttons that open the edit dialog; the row's detail line
   says "tap to edit".
 - **Feedback:** errors in `.error` with `role="alert"`; success as a short `.toast`

@@ -32,12 +32,44 @@ class UserUpdate(BaseModel):
     unit: Unit
 
 
+# The choices for custom exercises and the values catalog/exercises.csv may use, so the app's
+# equipment filter stays a short, known list.
+EQUIPMENT = ("Barbell", "Dumbbell", "Machine", "Cable", "Bodyweight", "Kettlebell", "Band", "Other")
+MUSCLE_GROUPS = ("Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full body", "Other")
+Equipment = Literal[EQUIPMENT]
+MuscleGroup = Literal[MUSCLE_GROUPS]
+
+
+def _clean_name(value: str) -> str:
+    name = " ".join(value.split())
+    if not name:
+        raise ValueError("can't be empty")
+    return name
+
+
+ExerciseName = Annotated[str, Field(max_length=80), AfterValidator(_clean_name)]
+
+
 class ExerciseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     name: str
     equipment: str
     muscle_group: str
+    custom: bool
+    retired: bool
+
+
+class ExerciseIn(BaseModel):
+    name: ExerciseName
+    equipment: Equipment
+    muscle_group: MuscleGroup
+
+
+class ExerciseUpdate(BaseModel):
+    name: ExerciseName | None = None
+    equipment: Equipment | None = None
+    muscle_group: MuscleGroup | None = None
 
 
 Weight = Annotated[Decimal, Field(ge=0, le=5000, max_digits=7, decimal_places=2)]

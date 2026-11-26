@@ -13,7 +13,11 @@ The live task list is the private GitHub Project board. This page is the overvie
 
 ## Phase 1: Make it a habit
 
-- Custom exercises (per user)
+- [x] Custom exercises, personal to each user (2026-11-26). The standard list is now edited in
+      `backend/catalog/exercises.csv` and synced with one command; removed exercises are retired,
+      never deleted.
+- Merge two catalog exercises (move everyone's logs, retire the duplicate)
+- "Suggest for everyone": promote a popular custom exercise into the catalog
 - Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
 - Personal-record badges and "beat last time" nudges
 - [x] Edit an entry; log a past date (2026-11-26)
@@ -48,7 +52,7 @@ privacy law).
 | Offline logging, per-set logging | ✅ | ✅ |
 | PR badges, "beat last time" nudges | ✅ | ✅ |
 | Progress chart: top weight, all time | ✅ | ✅ |
-| Custom exercises | Up to 5 | Unlimited |
+| Custom exercises | Up to 5 | Unlimited (`CUSTOM_EXERCISE_LIMIT` exists; unset until billing) |
 | Charts: est. 1RM and volume, date ranges, compare exercises | — | ✅ |
 | Weekly volume by muscle group, training summary | — | ✅ |
 | Routines (saved workouts you log in order) | — | ✅ |

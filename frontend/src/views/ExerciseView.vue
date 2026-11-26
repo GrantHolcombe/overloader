@@ -3,8 +3,10 @@ import { computed, onMounted, ref } from "vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import DateField from "../components/DateField.vue";
 import EditEntryDialog, { type EntryPatch } from "../components/EditEntryDialog.vue";
+import ExerciseFormDialog from "../components/ExerciseFormDialog.vue";
 import Stepper from "../components/Stepper.vue";
-import { api, type Exercise } from "../lib/api";
+import { useRouter } from "vue-router";
+import { api, type Exercise, type ExerciseFields } from "../lib/api";
 import {
   atDay,
   convert,
@@ -19,6 +21,7 @@ import {
 import { session } from "../lib/session";
 
 const props = defineProps<{ id: number }>();
+const router = useRouter();
 
 const exercise = ref<Exercise>();
 const logs = ref<LogEntry[]>([]);
@@ -136,6 +139,44 @@ async function saveEdit(patch: EntryPatch) {
   }
 }
 
+// Custom exercises only: edit the name/equipment/muscle, or delete it with its history.
+const editingExercise = ref(false);
+const exerciseBusy = ref(false);
+const exerciseError = ref("");
+const confirmingExerciseDelete = ref(false);
+
+function openExerciseEdit() {
+  exerciseError.value = "";
+  editingExercise.value = true;
+}
+
+async function saveExercise(fields: ExerciseFields) {
+  exerciseError.value = "";
+  exerciseBusy.value = true;
+  try {
+    exercise.value = await api.updateExercise(props.id, fields);
+    editingExercise.value = false;
+    showToast("Saved");
+  } catch (e) {
+    exerciseError.value = (e as Error).message;
+  } finally {
+    exerciseBusy.value = false;
+  }
+}
+
+async function deleteExercise() {
+  exerciseBusy.value = true;
+  try {
+    await api.deleteExercise(props.id);
+    router.replace("/");
+  } catch (e) {
+    error.value = (e as Error).message;
+    confirmingExerciseDelete.value = false;
+  } finally {
+    exerciseBusy.value = false;
+  }
+}
+
 let toastTimer: number | undefined;
 function showToast(message: string) {
   toast.value = message;
@@ -152,8 +193,23 @@ const time = (iso: string) =>
     <header class="topbar">
       <RouterLink to="/" class="btn btn-ghost icon-btn" aria-label="Back to exercises">‹</RouterLink>
       <h1>{{ exercise?.name ?? "…" }}</h1>
+      <button
+        v-if="exercise?.custom"
+        type="button"
+        class="btn btn-ghost"
+        aria-label="Edit this custom exercise"
+        @click="openExerciseEdit"
+      >
+        Edit
+      </button>
     </header>
-    <p v-if="exercise" class="muted sub">{{ exercise.equipment }} · {{ exercise.muscle_group }}</p>
+    <p v-if="exercise" class="muted sub">
+      <template v-if="exercise.custom">Custom · </template>{{ exercise.equipment }} ·
+      {{ exercise.muscle_group }}
+    </p>
+    <p v-if="exercise?.retired" class="muted retired">
+      No longer in the exercise list. Your history is kept, and you can still log it here.
+    </p>
 
     <section class="card last" aria-live="polite">
       <template v-if="last">
@@ -245,6 +301,30 @@ const time = (iso: string) =>
       @cancel="editing = null"
     />
 
+    <ExerciseFormDialog
+      :open="editingExercise && !confirmingExerciseDelete"
+      :exercise="exercise ?? null"
+      :busy="exerciseBusy"
+      :error="exerciseError"
+      @save="saveExercise"
+      @delete="confirmingExerciseDelete = true"
+      @cancel="editingExercise = false"
+    />
+    <ConfirmDialog
+      :open="confirmingExerciseDelete"
+      :title="`Delete ${exercise?.name ?? 'this exercise'}?`"
+      confirm-label="Delete"
+      danger
+      :busy="exerciseBusy"
+      @confirm="deleteExercise"
+      @cancel="confirmingExerciseDelete = false"
+    >
+      <template v-if="logs.length">
+        This also deletes its {{ logs.length }} logged {{ logs.length === 1 ? "entry" : "entries" }}.
+      </template>
+      This can't be undone.
+    </ConfirmDialog>
+
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
   </main>
 </template>
@@ -252,6 +332,10 @@ const time = (iso: string) =>
 <style scoped>
 .sub {
   margin: -8px 0 16px;
+}
+.retired {
+  margin: -8px 0 16px;
+  font-size: 0.9rem;
 }
 .last {
   display: flex;

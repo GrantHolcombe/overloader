@@ -7,6 +7,7 @@ Update this page in the same change as any migration.
 ```mermaid
 erDiagram
     app_user ||--o{ log_entry : logs
+    app_user ||--o{ exercise : "creates (custom)"
     exercise ||--o{ log_entry : "logged as"
 
     app_user {
@@ -27,9 +28,11 @@ erDiagram
     }
     exercise {
         int id PK
-        varchar name UK
-        varchar equipment "Barbell, Dumbbell, Machine, Cable, Bodyweight, Kettlebell"
-        varchar muscle_group
+        varchar name "unique per owner, ignoring case"
+        varchar equipment "fixed list, see schemas.py"
+        varchar muscle_group "fixed list, see schemas.py"
+        int user_id FK "NULL = catalog; cascade delete"
+        timestamptz retired_at "catalog only; hidden, history kept"
     }
     log_entry {
         int id PK
@@ -49,8 +52,17 @@ erDiagram
 - **email_login_code**: not linked to `app_user`, because a code can be requested before the
   account exists. Rows older than a day are deleted whenever a new code is requested. The same
   table backs the rate limits (3 per address per 15 minutes, 10 per day, 10 per IP per hour).
-- **exercise**: the shared catalog, seeded in migration `0001` (86 rows). Add exercises with a
-  new migration so every environment gets them.
+- **exercise**: two kinds in one table so log entries point at either the same way.
+  - *Catalog* (`user_id` NULL): the shared list, managed from `backend/catalog/exercises.csv` with
+    `python -m app.catalog --apply` (see `backend/catalog/README.md`). Removing a row sets
+    `retired_at` instead of deleting, so history survives; renames go through `renames.csv`.
+    Migration `0001` seeded the first 86 rows.
+  - *Custom* (`user_id` set): made by one user and visible only to them. Deleting one deletes
+    its log entries too (the API does both in one transaction; the foreign key itself doesn't
+    cascade, so a catalog exercise with history can never be deleted by accident).
+  - Unique names: partial indexes `exercise_catalog_name` on `lower(name)` for the catalog and
+    `exercise_user_name` on `(user_id, lower(name))` for custom ones. A custom exercise may share
+    a catalog name.
 - **log_entry**: one row per logged exercise, as weight × reps × sets. The weight keeps the unit
   it was entered in, so switching the display unit never rewrites history; the app converts for
   charts. Index `(user_id, exercise_id, performed_at)` serves the history, chart and "last time"

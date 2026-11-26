@@ -52,6 +52,20 @@ export interface Exercise {
   name: string;
   equipment: string;
   muscle_group: string;
+  /** Created by this user; only they see it. */
+  custom: boolean;
+  /** Taken out of the catalog; still opens for anyone with history. */
+  retired: boolean;
+}
+
+// Must match EQUIPMENT and MUSCLE_GROUPS in backend/app/schemas.py.
+export const EQUIPMENT = ["Barbell", "Dumbbell", "Machine", "Cable", "Bodyweight", "Kettlebell", "Band", "Other"] as const;
+export const MUSCLE_GROUPS = ["Chest", "Back", "Legs", "Shoulders", "Arms", "Core", "Full body", "Other"] as const;
+
+export interface ExerciseFields {
+  name: string;
+  equipment: (typeof EQUIPMENT)[number];
+  muscle_group: (typeof MUSCLE_GROUPS)[number];
 }
 
 export interface RecentExercise {
@@ -70,6 +84,11 @@ export const api = {
   setUnit: (unit: Unit) => request<User>("/api/me", { method: "PATCH", body: { unit } }),
   exercises: () => request<Exercise[]>("/api/exercises"),
   exercise: (id: number) => request<Exercise>(`/api/exercises/${id}`),
+  createExercise: (body: ExerciseFields) =>
+    request<Exercise>("/api/exercises", { method: "POST", body }),
+  updateExercise: (id: number, body: Partial<ExerciseFields>) =>
+    request<Exercise>(`/api/exercises/${id}`, { method: "PATCH", body }),
+  deleteExercise: (id: number) => request<void>(`/api/exercises/${id}`, { method: "DELETE" }),
   recent: () => request<RecentExercise[]>("/api/exercises/recent"),
   logs: (exerciseId: number) => request<LogEntry[]>(`/api/exercises/${exerciseId}/logs`),
   addLog: (
