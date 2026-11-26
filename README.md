@@ -52,6 +52,9 @@ npm install
 npm run dev
 ```
 
+**On a phone:** `npm run dev:phone` serves the app on your LAN (the Network URL it prints).
+Plain HTTP off localhost means no service worker or install prompt; the rest works.
+
 **Tests:** `npm test` in `frontend/`; `pytest` in `backend/` with `TEST_DATABASE_URL` set to a
 database the tests may wipe (CI uses a throwaway Postgres container).
 
