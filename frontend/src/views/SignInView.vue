@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, ref } from "vue";
+import { ref } from "vue";
 import { useRouter } from "vue-router";
+import CodeInput from "../components/CodeInput.vue";
 import { api } from "../lib/api";
 import { signIn } from "../lib/session";
 
@@ -10,7 +11,13 @@ const email = ref("");
 const code = ref("");
 const busy = ref(false);
 const error = ref("");
-const codeInput = ref<HTMLInputElement>();
+// A new key remounts CodeInput, which clears the boxes and focuses the first one.
+const codeKey = ref(0);
+
+function resetCode() {
+  code.value = "";
+  codeKey.value++;
+}
 
 async function sendCode() {
   error.value = "";
@@ -18,9 +25,7 @@ async function sendCode() {
   try {
     await api.requestCode(email.value.trim());
     step.value = "code";
-    code.value = "";
-    await nextTick();
-    codeInput.value?.focus();
+    resetCode();
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -29,6 +34,7 @@ async function sendCode() {
 }
 
 async function verify() {
+  if (busy.value || code.value.length !== 6) return;
   error.value = "";
   busy.value = true;
   try {
@@ -37,6 +43,7 @@ async function verify() {
     router.replace("/");
   } catch (e) {
     error.value = (e as Error).message;
+    resetCode();
   } finally {
     busy.value = false;
   }
@@ -78,21 +85,10 @@ async function verify() {
         >. It works for 10 minutes.
       </p>
       <div>
-        <label class="label" for="code">Sign-in code</label>
-        <input
-          id="code"
-          ref="codeInput"
-          v-model="code"
-          class="input code"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          pattern="[0-9 ]*"
-          maxlength="7"
-          required
-          placeholder="123456"
-        />
+        <span class="label">Sign-in code</span>
+        <CodeInput :key="codeKey" :disabled="busy" @change="code = $event" @complete="verify" />
       </div>
-      <button class="btn btn-primary btn-block" :disabled="busy || code.replace(/\s/g, '').length !== 6">
+      <button class="btn btn-primary btn-block" :disabled="busy || code.length !== 6">
         {{ busy ? "Checking…" : "Sign in" }}
       </button>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -125,11 +121,6 @@ async function verify() {
 .small {
   font-size: 0.9rem;
   margin: 0;
-}
-.code {
-  font-size: 1.6rem;
-  letter-spacing: 0.3em;
-  text-align: center;
 }
 .row {
   display: flex;

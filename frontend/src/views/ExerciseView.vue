@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import Stepper from "../components/Stepper.vue";
 import { api, type Exercise } from "../lib/api";
 import {
@@ -77,14 +78,23 @@ async function save() {
   }
 }
 
-async function remove(entry: LogEntry) {
-  if (!confirm(`Delete ${formatEntry(entry)}? This can't be undone.`)) return;
+const pendingDelete = ref<LogEntry | null>(null);
+const deleting = ref(false);
+
+async function confirmDelete() {
+  const entry = pendingDelete.value;
+  if (!entry) return;
+  error.value = "";
+  deleting.value = true;
   try {
     await api.deleteLog(entry.id);
     logs.value = logs.value.filter((l) => l.id !== entry.id);
     showToast("Deleted");
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    deleting.value = false;
+    pendingDelete.value = null;
   }
 }
 
@@ -155,7 +165,7 @@ const time = (iso: string) =>
             <button
               class="btn btn-ghost icon-btn"
               :aria-label="`Delete ${formatEntry(entry)}`"
-              @click="remove(entry)"
+              @click="pendingDelete = entry"
             >
               ×
             </button>
@@ -163,6 +173,22 @@ const time = (iso: string) =>
         </ul>
       </section>
     </template>
+
+    <ConfirmDialog
+      :open="pendingDelete !== null"
+      title="Delete this entry?"
+      confirm-label="Delete"
+      danger
+      :busy="deleting"
+      @confirm="confirmDelete"
+      @cancel="pendingDelete = null"
+    >
+      <template v-if="pendingDelete">
+        <strong class="entry">{{ formatEntry(pendingDelete) }}</strong>
+        <span>{{ relativeDay(pendingDelete.performed_at) }}, {{ time(pendingDelete.performed_at) }}.</span>
+        This can't be undone.
+      </template>
+    </ConfirmDialog>
 
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
   </main>
@@ -187,6 +213,12 @@ const time = (iso: string) =>
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.entry {
+  display: block;
+  color: var(--text);
+  font-size: 1.1rem;
+  margin-bottom: 2px;
 }
 .day h3 {
   font-size: 0.9rem;

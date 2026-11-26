@@ -29,5 +29,12 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Lists:** `.list` with `.list-row` (title, `<small>` detail line, chevron).
 - **Chips** for filters, **segmented** control for 2–3 exclusive options; both use
   `aria-pressed`.
+- **Code entry** (`components/CodeInput.vue`, ported from Setups.Bike): one box per digit.
+  Typing advances, Backspace on an empty box goes back, and a paste or the phone's one-time-code
+  suggestion fills every box. Filling the last box submits.
+- **Confirm dialog** (`components/ConfirmDialog.vue`): the only modal. Never use the browser's
+  `confirm()` or `alert()`. Built on `<dialog>.showModal()` (focus trap, Escape and backdrop tap
+  cancel). Focus starts on Cancel; destructive actions use `danger` (`.btn-danger`) and say
+  they can't be undone.
 - **Feedback:** errors in `.error` with `role="alert"`; success as a short `.toast`
-  (`role="status"`). Destructive actions confirm first and say they can't be undone.
+  (`role="status"`).

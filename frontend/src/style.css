@@ -127,6 +127,11 @@ a {
   border-color: var(--accent);
   color: var(--accent-text);
 }
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 .btn-block {
   width: 100%;
 }

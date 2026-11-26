@@ -26,6 +26,22 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-26: Six code boxes and an in-app modal, from the first run-through
+
+**Situation:** After my first run of the app, two things felt off. The sign-in code was one text
+field, and deleting a log used the browser's `confirm()` popup.
+
+**Decision:**
+- **Code entry:** use six boxes, one per digit, like Setups.Bike's sign-in. The agent ported
+  that component to Vue, keeping paste-to-fill, autofill and auto-submit.
+- **Delete:** use the app's own modal, not a browser alert. It's now the one confirmation
+  pattern in the style guide, and browser dialogs are off-limits.
+
+**Why:** Both apps should feel the same where they do the same thing, and a native popup looks
+out of place in an installed PWA. It also can't be styled and reads like an error on a phone.
+
+---
+
 ## 2026-11-26: Stack, scope and where it runs
 
 **Situation:** Starting a new portfolio project: a lifting log that makes progressive overload
