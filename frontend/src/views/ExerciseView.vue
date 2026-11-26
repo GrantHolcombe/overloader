@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import DateField from "../components/DateField.vue";
 import EditEntryDialog, { type EntryPatch } from "../components/EditEntryDialog.vue";
 import Stepper from "../components/Stepper.vue";
 import { api, type Exercise } from "../lib/api";
@@ -174,13 +175,11 @@ const time = (iso: string) =>
         <Stepper v-model="reps" label="Reps" :min="1" :max="1000" />
         <Stepper v-model="sets" label="Sets" :min="1" :max="100" />
       </div>
-      <div class="date-row">
-        <label class="label" for="log-day">Date</label>
-        <input id="log-day" v-model="logDay" class="input" type="date" :max="today()" required />
+      <DateField id="log-day" v-model="logDay" label="Date">
         <button v-if="!isToday" type="button" class="btn btn-ghost" @click="logDay = today()">
           Today
         </button>
-      </div>
+      </DateField>
       <button class="btn btn-primary btn-block" :disabled="saving || !logDay">
         {{ saving ? "Saving…" : isToday ? "Log it" : `Log for ${formatDay(logDay)}` }}
       </button>
@@ -275,14 +274,6 @@ const time = (iso: string) =>
   color: var(--text);
   font-size: 1.1rem;
   margin-bottom: 2px;
-}
-.date-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: 8px;
-}
-.date-row .label {
-  grid-column: 1 / -1;
 }
 .edit {
   all: unset;

@@ -56,6 +56,8 @@ function onClick(event: MouseEvent) {
 }
 .content {
   padding: 20px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 h2 {
   margin: 0 0 8px;
