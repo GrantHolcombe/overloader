@@ -28,7 +28,9 @@ The live task list is the private GitHub Project board. This page is the overvie
 - Account deletion and data export
 - Legal pages: Terms, Privacy, Refunds and cancellation (see below)
 
-## Pro plan (proposal, waiting on Grant)
+## Pro plan (split and pricing approved by Grant 2026-11-26)
+
+Still open: whether to offer a free trial (Setups.Bike has none).
 
 Freemium like Setups.Bike, with Stripe the same way: Checkout for buying, the Customer Portal
 for managing and cancelling, and a signed webhook that keeps the plan in the database.

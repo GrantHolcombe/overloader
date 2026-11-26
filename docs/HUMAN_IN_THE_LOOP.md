@@ -26,6 +26,28 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-26: Freemium, and where the paywall goes
+
+**Situation:** Before Phase 1, I decided Overloader should make money the same way Setups.Bike
+does: a free tier and a Pro subscription through Stripe. I asked the agent for options on what
+a usable free tier looks like and what's worth paying for, and for tickets covering terms,
+privacy and the rest of the legal work.
+
+**Decision:** I approved this split (proposed by the agent, in `docs/ROADMAP.md`):
+- **Free, unlimited:** logging, the full catalog, history, the top-weight chart, PR badges,
+  offline and per-set logging, CSV export and account deletion.
+- **Pro, $2.99/month or $24/year** (same as Setups.Bike): advanced charts (est. 1RM, volume,
+  ranges), muscle-group volume, routines, unlimited custom exercises (free gets 5), and a plate
+  calculator.
+- The Setups.Bike rules carry over: limits enforced in the API, nothing deleted when Pro lapses,
+  billing behind a kill switch and tested in a Stripe sandbox first.
+
+**Why:** The free tier has to be genuinely useful every day or nobody builds the habit that
+makes Pro worth buying. Charging for analysis and convenience, never for someone's own data,
+keeps the paywall fair and avoids privacy-law problems with export and deletion.
+
+---
+
 ## 2026-11-26: Reviewing the agent's defaults instead of inheriting them
 
 **Situation:** To get a working app quickly, the agent picked several defaults while scaffolding
