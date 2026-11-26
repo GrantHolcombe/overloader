@@ -18,6 +18,8 @@ The live task list is the private GitHub Project board. This page is the overvie
       never deleted.
 - Merge two catalog exercises (move everyone's logs, retire the duplicate)
 - "Suggest for everyone": promote a popular custom exercise into the catalog
+- View logs from a specific day in the Recent area (free)
+- Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro)
 - Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
 - Personal-record badges and "beat last time" nudges
 - [x] Edit an entry; log a past date (2026-11-26)
@@ -55,6 +57,8 @@ privacy law).
 | Custom exercises | Up to 5 | Unlimited (`CUSTOM_EXERCISE_LIMIT` exists; unset until billing) |
 | Charts: est. 1RM and volume, date ranges, compare exercises | — | ✅ |
 | Weekly volume by muscle group, training summary | — | ✅ |
+| Muscle-group heat map (body outline shaded by recency) | — | ✅ |
+| View any past day's logs | ✅ | ✅ |
 | Routines (saved workouts you log in order) | — | ✅ |
 | Plate calculator, warm-up set suggestions | — | ✅ |
 | Data export (CSV), account deletion | ✅ always | ✅ |
