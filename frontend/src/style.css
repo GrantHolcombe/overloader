@@ -89,6 +89,11 @@ a {
   margin-bottom: 16px;
   min-height: 44px;
 }
+.topbar .logo {
+  flex: none;
+  border-radius: 8px;
+  margin-right: -2px;
+}
 .topbar h1 {
   flex: 1;
   min-width: 0;

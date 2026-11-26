@@ -38,6 +38,7 @@ function toggleEquipment(type: string) {
 <template>
   <main>
     <header class="topbar">
+      <img src="/favicon.svg" alt="" width="36" height="36" class="logo" />
       <h1>Overloader</h1>
       <RouterLink to="/settings" class="btn btn-ghost icon-btn" aria-label="Settings">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

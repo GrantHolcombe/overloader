@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import CodeInput from "../components/CodeInput.vue";
 import { api } from "../lib/api";
@@ -14,10 +14,20 @@ const error = ref("");
 // A new key remounts CodeInput, which clears the boxes and focuses the first one.
 const codeKey = ref(0);
 
+const codeForm = ref<HTMLFormElement>();
+
 function resetCode() {
   code.value = "";
   codeKey.value++;
 }
+
+// When the keyboard opens (the visual viewport shrinks), bring the code form to the top so the
+// boxes aren't hidden behind it. Does nothing when there's nothing to scroll.
+function keepCodeVisible() {
+  if (step.value === "code") codeForm.value?.scrollIntoView({ block: "start", behavior: "smooth" });
+}
+onMounted(() => window.visualViewport?.addEventListener("resize", keepCodeVisible));
+onBeforeUnmount(() => window.visualViewport?.removeEventListener("resize", keepCodeVisible));
 
 async function sendCode() {
   error.value = "";
@@ -26,6 +36,7 @@ async function sendCode() {
     await api.requestCode(email.value.trim());
     step.value = "code";
     resetCode();
+    nextTick(keepCodeVisible);
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -51,7 +62,7 @@ async function verify() {
 </script>
 
 <template>
-  <main class="signin">
+  <main class="signin" :class="{ compact: step === 'code' }">
     <div class="brand">
       <img src="/favicon.svg" alt="" width="64" height="64" />
       <h1>Overloader</h1>
@@ -79,7 +90,7 @@ async function verify() {
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
 
-    <form v-else class="card stack" @submit.prevent="verify">
+    <form v-else ref="codeForm" class="card stack" @submit.prevent="verify">
       <p>
         We sent a code to <strong>{{ email }}</strong
         >. It works for 10 minutes.
@@ -117,6 +128,30 @@ async function verify() {
 }
 .brand p {
   margin: 4px 0 0;
+}
+/* Code step: the phone keyboard takes the bottom half of the screen, so shrink the header to
+   one row and keep the code boxes high. */
+.compact {
+  padding-top: 0;
+}
+.compact .brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.compact .brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+.compact .brand h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+.compact .brand p {
+  display: none;
 }
 .small {
   font-size: 0.9rem;
