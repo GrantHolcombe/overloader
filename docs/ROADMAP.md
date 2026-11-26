@@ -9,7 +9,7 @@ The live task list is the private GitHub Project board. This page is the overvie
 - [x] Vue PWA: sign-in, searchable catalog with equipment filter, logging with last-time
       prefill, history, progress chart (top weight / est. 1RM / volume), unit setting
 - [x] Neon project + dev database, first end-to-end run on localhost (2026-11-26)
-- [ ] Try it at the gym from a phone on the LAN; fix what's awkward
+- [x] Try it from a phone on the LAN; fix what's awkward (2026-11-26: 6-box code, in-app modal, code above keyboard, header logo)
 
 ## Phase 1: Make it a habit
 
