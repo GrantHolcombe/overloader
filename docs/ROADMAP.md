@@ -2,7 +2,7 @@
 
 The live task list is the private GitHub Project board. This page is the overview.
 
-## Phase 0: Local MVP (in progress)
+## Phase 0: Local MVP (done)
 
 - [x] Repo, CI (ruff, pytest on Postgres, vitest, type-check, build)
 - [x] FastAPI API: email one-time-code sign-in, JWT, exercise catalog, log CRUD, recent list
@@ -25,7 +25,66 @@ The live task list is the private GitHub Project board. This page is the overvie
 - Frontend on S3 behind Cloudflare, deployed by GitHub Actions (like hiregrant.today)
 - Resend sending domain, SPF/DKIM
 - Domain and final app name
-- Account deletion and data export; privacy policy
+- Account deletion and data export
+- Legal pages: Terms, Privacy, Refunds and cancellation (see below)
+
+## Pro plan (proposal, waiting on Grant)
+
+Freemium like Setups.Bike, with Stripe the same way: Checkout for buying, the Customer Portal
+for managing and cancelling, and a signed webhook that keeps the plan in the database.
+
+**The line:** everything that records your training, and everything that is your data, stays
+free and unlimited. Pro sells *insight* (analysis on top of the log) and *convenience* (things
+that save taps). Paywalling the logging itself would break the habit the app depends on, and
+holding someone's own history hostage costs trust (and, for export and deletion, runs into
+privacy law).
+
+| | Free | Pro |
+|---|---|---|
+| Price | $0, no card | $2.99/month or $24/year (same as Setups.Bike) |
+| Logging, full catalog, last time, full history, edit, past dates | ✅ unlimited | ✅ |
+| Offline logging, per-set logging | ✅ | ✅ |
+| PR badges, "beat last time" nudges | ✅ | ✅ |
+| Progress chart: top weight, all time | ✅ | ✅ |
+| Custom exercises | Up to 5 | Unlimited |
+| Charts: est. 1RM and volume, date ranges, compare exercises | — | ✅ |
+| Weekly volume by muscle group, training summary | — | ✅ |
+| Routines (saved workouts you log in order) | — | ✅ |
+| Plate calculator, warm-up set suggestions | — | ✅ |
+| Data export (CSV), account deletion | ✅ always | ✅ |
+
+Rules (carried over from Setups.Bike):
+- Limits are enforced in the API, not only the UI.
+- If Pro lapses, nothing is deleted: extra custom exercises and routines become read-only, and
+  the charts fall back to top weight.
+- Billing ships behind a `BILLING_ENABLED_FOR` switch (only Grant at first), Stripe sandbox
+  first, and Grant's account comped (`plan_source = 'comp'`).
+- Note: est. 1RM and volume charts are free in the app today. With no users yet, moving them
+  behind Pro takes nothing away from anyone.
+
+**Depends on hosting:** Stripe's webhook needs a public HTTPS URL, so live billing waits for the
+API host. Sandbox work can happen locally with `stripe listen --forward-to localhost:8000/...`.
+
+**If it ever goes to the app stores**, Apple and Google rules for in-app purchases apply to
+digital subscriptions sold inside a store app. As a PWA, Stripe is fine.
+
+## Legal (needed before Pro or real users)
+
+Port Setups.Bike's `legal/` setup (HTML templates filled from one `site.config.json`; any `TODO`
+value fails the build) for:
+- **Terms of Service**, including an exercise-risk / not-medical-advice disclaimer and
+  subscription terms (auto-renewal, cancel anytime in the portal).
+- **Privacy Policy**: what's stored (email, lifting logs, IP addresses for rate limits and
+  logs), the processors (Neon, Resend, Stripe, the API host, Cloudflare), retention, export and
+  deletion, minimum age 13. Check whether workout logs count as *consumer health data* under
+  state laws such as Washington's My Health My Data Act, which has its own consent and
+  privacy-policy rules.
+- **Refunds and cancellation**, plus the auto-renewal disclosure shown next to the Subscribe
+  button (California's automatic renewal law requires clear terms and online cancellation).
+- A support email on the app's domain.
+
+These are drafts for Grant's review, not legal advice; a template service or a lawyer's pass is
+worth it before charging money.
 
 ## Scaffolding defaults (reviewed 2026-11-26)
 
