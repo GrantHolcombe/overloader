@@ -127,3 +127,110 @@ export function matches(
     .filter(Boolean)
     .every((word) => hay.includes(word));
 }
+
+// ---------------------------------------------------------------------------------------------
+// Personal records and "beat last time"
+// ---------------------------------------------------------------------------------------------
+
+export type PRKind = "weight" | "e1rm" | "volume";
+
+export const PR_LABELS: Record<PRKind, string> = {
+  weight: "Heaviest weight",
+  e1rm: "Best est. 1RM",
+  volume: "Most volume",
+};
+
+// Entries can be in different units, so records are compared in kg. Anything closer than this
+// counts as a tie, and a tie isn't a new record.
+const EPSILON_KG = 0.01;
+
+export interface LiftValues {
+  weight: number;
+  unit: Unit;
+  reps: number;
+  sets: number;
+}
+
+function inKg(lift: LiftValues): Record<PRKind, number> {
+  const w = convert(lift.weight, lift.unit, "kg");
+  return { weight: w, e1rm: estimatedOneRepMax(w, lift.reps), volume: w * lift.reps * lift.sets };
+}
+
+const KINDS: PRKind[] = ["weight", "e1rm", "volume"];
+
+function chronological(entries: LogEntry[]): LogEntry[] {
+  return [...entries].sort((a, b) => a.performed_at.localeCompare(b.performed_at) || a.id - b.id);
+}
+
+/**
+ * Which entries set a record when they were logged: each one is compared with every entry
+ * before it in time. The very first entry is the baseline, not a record.
+ */
+export function personalRecords(entries: LogEntry[]): Map<number, PRKind[]> {
+  const records = new Map<number, PRKind[]>();
+  let best: Record<PRKind, number> | null = null;
+  for (const entry of chronological(entries)) {
+    const m = inKg(entry);
+    if (best === null) {
+      best = m;
+      continue;
+    }
+    const current = best;
+    const beaten = KINDS.filter((k) => m[k] > current[k] + EPSILON_KG);
+    if (beaten.length) records.set(entry.id, beaten);
+    for (const k of KINDS) current[k] = Math.max(current[k], m[k]);
+  }
+  return records;
+}
+
+/** The records a lift would set if it were logged now (none when there's no history yet). */
+export function wouldSetRecords(lift: LiftValues, entries: LogEntry[]): PRKind[] {
+  if (!entries.length) return [];
+  const m = inKg(lift);
+  const history = entries.map(inKg);
+  return KINDS.filter((k) => history.every((h) => m[k] > h[k] + EPSILON_KG));
+}
+
+/** The latest entry before a moment ("last time" when backfilling a past day). */
+export function entryBefore(entries: LogEntry[], iso: string): LogEntry | undefined {
+  const before = chronological(entries).filter((e) => e.performed_at < iso);
+  return before.at(-1);
+}
+
+export interface Comparison {
+  status: "beat" | "match" | "below";
+  /** In the lift's own unit. */
+  weightDiff: number;
+  repsDiff: number;
+  setsDiff: number;
+}
+
+/**
+ * How a lift compares with last time. Est. 1RM decides, so fewer reps at a heavier weight can
+ * still count as progress; if that's a tie, more total volume (an extra set) wins.
+ */
+export function compareToLast(lift: LiftValues, last: LogEntry): Comparison {
+  const now = inKg(lift);
+  const then = inKg(last);
+  let status: Comparison["status"] = "match";
+  if (now.e1rm > then.e1rm + EPSILON_KG) status = "beat";
+  else if (now.e1rm < then.e1rm - EPSILON_KG) status = "below";
+  else if (now.volume > then.volume + EPSILON_KG) status = "beat";
+  else if (now.volume < then.volume - EPSILON_KG) status = "below";
+  return {
+    status,
+    weightDiff: Math.round((lift.weight - convert(last.weight, last.unit, lift.unit)) * 100) / 100,
+    repsDiff: lift.reps - last.reps,
+    setsDiff: lift.sets - last.sets,
+  };
+}
+
+/** For example "+5 lb · −1 rep · same sets". */
+export function describeDiff(c: Comparison, unit: Unit): string {
+  const signed = (n: number, text: string) => `${n > 0 ? "+" : "−"}${text}`;
+  const count = (n: number, one: string, many: string) =>
+    n === 0 ? `same ${many}` : signed(n, `${Math.abs(n)} ${Math.abs(n) === 1 ? one : many}`);
+  const weight =
+    c.weightDiff === 0 ? "same weight" : signed(c.weightDiff, formatWeight(Math.abs(c.weightDiff), unit));
+  return [weight, count(c.repsDiff, "rep", "reps"), count(c.setsDiff, "set", "sets")].join(" · ");
+}

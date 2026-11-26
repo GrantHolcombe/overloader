@@ -49,6 +49,12 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Custom exercises** show a small accent `.tag` ("Custom") before their detail line, a
   "Custom" filter chip appears first once you have one, and an empty search offers to add the
   query as a custom exercise.
+- **Records and "last time":** `lib/lifting.ts` works them out from the history (est. 1RM
+  decides "beat / match / below"; ties and the very first entry are never records). On the log
+  form a `.nudge` card under the steppers updates live: neutral for match/below, green title for
+  beating last time, orange border and title when the lift would be a new PR. History rows that
+  set a record get a "PR" `.tag` and list which records; a new PR shows an orange `.toast.pr`
+  for 3.5 s instead of the green "Logged".
 - **Tap to edit:** history rows are buttons that open the edit dialog; the row's detail line
   says "tap to edit".
 - **Feedback:** errors in `.error` with `role="alert"`; success as a short `.toast`

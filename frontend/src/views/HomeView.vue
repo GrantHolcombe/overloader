@@ -164,17 +164,6 @@ function toggleEquipment(type: string) {
   min-height: 44px;
   color: var(--accent);
 }
-.tag {
-  display: inline-block;
-  margin-right: 6px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--surface-2);
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
 .empty p {
   margin: 0 0 10px;
 }

@@ -9,14 +9,21 @@ import { useRouter } from "vue-router";
 import { api, type Exercise, type ExerciseFields } from "../lib/api";
 import {
   atDay,
+  compareToLast,
   convert,
   dayKey,
+  describeDiff,
+  entryBefore,
   formatDay,
   formatEntry,
+  personalRecords,
+  PR_LABELS,
   relativeDay,
   today,
   weightStep,
+  wouldSetRecords,
   type LogEntry,
+  type PRKind,
 } from "../lib/lifting";
 import { session } from "../lib/session";
 
@@ -28,6 +35,7 @@ const logs = ref<LogEntry[]>([]);
 const error = ref("");
 const saving = ref(false);
 const toast = ref("");
+const toastKind = ref<"ok" | "pr">("ok");
 const unit = computed(() => session.user?.unit ?? "lb");
 
 const weight = ref(0);
@@ -62,6 +70,32 @@ const history = computed(() => {
   return groups;
 });
 
+// Which entries set a record when they were logged (worked out from the history, so edits and
+// backdated entries are always reflected).
+const records = computed(() => personalRecords(logs.value));
+const recordText = (kinds: PRKind[]) => kinds.map((k) => PR_LABELS[k]).join(", ");
+
+// The lift on the form, compared with the entries before the day it's being logged for.
+const lift = computed(() => ({
+  weight: weight.value,
+  unit: unit.value,
+  reps: reps.value,
+  sets: sets.value,
+}));
+const priorEntries = computed(() => {
+  if (isToday.value) return logs.value;
+  const moment = atDay(logDay.value);
+  return logs.value.filter((e) => e.performed_at < moment);
+});
+const previous = computed(() =>
+  isToday.value ? logs.value[0] : entryBefore(logs.value, atDay(logDay.value)),
+);
+const comparison = computed(() =>
+  previous.value ? compareToLast(lift.value, previous.value) : null,
+);
+const upcomingRecords = computed(() => wouldSetRecords(lift.value, priorEntries.value));
+const NUDGE = { beat: "Beats last time", match: "Matches last time", below: "Below last time" };
+
 function prefill() {
   // Start from last time, so matching it is one tap and beating it is two.
   if (!last.value) return;
@@ -90,7 +124,9 @@ async function save() {
       ...(isToday.value ? {} : { performed_at: atDay(logDay.value) }),
     });
     logs.value = sortLogs([entry, ...logs.value]);
-    showToast(isToday.value ? "Logged" : `Logged for ${formatDay(logDay.value)}`);
+    const set = records.value.get(entry.id);
+    if (set) showToast(`New PR! ${recordText(set)}`, "pr");
+    else showToast(isToday.value ? "Logged" : `Logged for ${formatDay(logDay.value)}`);
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -178,10 +214,11 @@ async function deleteExercise() {
 }
 
 let toastTimer: number | undefined;
-function showToast(message: string) {
+function showToast(message: string, kind: "ok" | "pr" = "ok") {
   toast.value = message;
+  toastKind.value = kind;
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => (toast.value = ""), 1800);
+  toastTimer = window.setTimeout(() => (toast.value = ""), kind === "pr" ? 3500 : 1800);
 }
 
 const time = (iso: string) =>
@@ -231,6 +268,16 @@ const time = (iso: string) =>
         <Stepper v-model="reps" label="Reps" :min="1" :max="1000" />
         <Stepper v-model="sets" label="Sets" :min="1" :max="100" />
       </div>
+      <div
+        v-if="comparison"
+        class="nudge"
+        :class="upcomingRecords.length ? 'pr' : comparison.status"
+        aria-live="polite"
+      >
+        <strong>{{ upcomingRecords.length ? "New PR if you log this" : NUDGE[comparison.status] }}</strong>
+        <span>{{ describeDiff(comparison, unit) }}</span>
+        <span v-if="upcomingRecords.length">{{ recordText(upcomingRecords) }}</span>
+      </div>
       <DateField id="log-day" v-model="logDay" label="Date">
         <button v-if="!isToday" type="button" class="btn btn-ghost" @click="logDay = today()">
           Today
@@ -263,8 +310,13 @@ const time = (iso: string) =>
               :aria-label="`Edit ${formatEntry(entry)}`"
               @click="editing = entry"
             >
-              {{ formatEntry(entry) }}
-              <small>{{ time(entry.performed_at) }} · tap to edit</small>
+              <span>
+                <span v-if="records.get(entry.id)" class="tag">PR</span>{{ formatEntry(entry) }}
+              </span>
+              <small v-if="records.get(entry.id)">
+                {{ time(entry.performed_at) }} · {{ recordText(records.get(entry.id)!) }}
+              </small>
+              <small v-else>{{ time(entry.performed_at) }} · tap to edit</small>
             </button>
             <button
               class="btn btn-ghost icon-btn"
@@ -325,7 +377,9 @@ const time = (iso: string) =>
       This can't be undone.
     </ConfirmDialog>
 
-    <div v-if="toast" class="toast" role="status">{{ toast }}</div>
+    <div v-if="toast" class="toast" :class="{ pr: toastKind === 'pr' }" role="status">
+      {{ toast }}
+    </div>
   </main>
 </template>
 
@@ -352,6 +406,30 @@ const time = (iso: string) =>
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.nudge {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.nudge strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+.nudge.beat strong {
+  color: var(--success);
+}
+.nudge.pr {
+  border-color: var(--accent);
+}
+.nudge.pr strong {
+  color: var(--accent);
 }
 .entry {
   display: block;

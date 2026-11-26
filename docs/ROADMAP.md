@@ -21,7 +21,7 @@ The live task list is the private GitHub Project board. This page is the overvie
 - View logs from a specific day in the Recent area (free)
 - Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro)
 - Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
-- Personal-record badges and "beat last time" nudges
+- [x] Personal-record badges and "beat last time" nudges (2026-11-26)
 - [x] Edit an entry; log a past date (2026-11-26)
 - Offline logging queue (save at the rack, sync when signal returns)
 

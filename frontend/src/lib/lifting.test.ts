@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   atDay,
+  compareToLast,
   convert,
   dayKey,
+  describeDiff,
+  entryBefore,
+  personalRecords,
   today,
+  wouldSetRecords,
   dailySeries,
   estimatedOneRepMax,
   matches,
@@ -96,5 +101,68 @@ describe("relativeDay", () => {
     expect(relativeDay("2026-11-26T08:00:00", now)).toBe("Today");
     expect(relativeDay("2026-11-25T20:00:00", now)).toBe("Yesterday");
     expect(relativeDay("2026-11-23T20:00:00", now)).toBe("3 days ago");
+  });
+});
+
+describe("personal records", () => {
+  const log = (id: number, day: string, weight: number, reps: number, unit: "lb" | "kg" = "lb") =>
+    entry({ id, performed_at: `${day}T18:00:00`, weight, reps, sets: 3, unit });
+
+  it("flags entries that beat everything before them, not the first one or ties", () => {
+    const records = personalRecords([
+      log(1, "2026-11-01", 135, 8),
+      log(2, "2026-11-03", 135, 8), // a tie is not a record
+      log(3, "2026-11-05", 140, 6), // heavier, but est. 1RM and volume are lower
+      log(4, "2026-11-08", 135, 12), // more reps: est. 1RM and volume, not weight
+    ]);
+    expect(records.get(1)).toBeUndefined();
+    expect(records.get(2)).toBeUndefined();
+    expect(records.get(3)).toEqual(["weight"]);
+    expect(records.get(4)).toEqual(["e1rm", "volume"]);
+  });
+
+  it("compares across units and goes by date, not list order", () => {
+    const records = personalRecords([
+      log(2, "2026-11-10", 70, 5, "kg"), // about 154 lb, logged later
+      log(1, "2026-11-01", 150, 5),
+    ]);
+    expect(records.get(2)).toEqual(["weight", "e1rm", "volume"]);
+    expect(records.get(1)).toBeUndefined();
+  });
+
+  it("says which records a lift would set", () => {
+    const history = [log(1, "2026-11-01", 135, 8), log(2, "2026-11-05", 145, 5)];
+    const lift = (weight: number, reps: number) => ({ weight, unit: "lb" as const, reps, sets: 3 });
+    expect(wouldSetRecords(lift(150, 5), history)).toEqual(["weight", "e1rm"]);
+    expect(wouldSetRecords(lift(145, 5), history)).toEqual([]);
+    expect(wouldSetRecords(lift(999, 5), [])).toEqual([]);
+  });
+});
+
+describe("compared with last time", () => {
+  const last = entry({ weight: 150, reps: 7, sets: 3 });
+  const lift = (weight: number, reps: number, sets = 3) => ({ weight, unit: "lb" as const, reps, sets });
+
+  it("beats, matches or falls below by est. 1RM, then volume", () => {
+    expect(compareToLast(lift(155, 7), last).status).toBe("beat");
+    expect(compareToLast(lift(150, 7), last).status).toBe("match");
+    expect(compareToLast(lift(150, 7, 4), last).status).toBe("beat");
+    expect(compareToLast(lift(150, 6), last).status).toBe("below");
+    expect(compareToLast(lift(160, 6), last).status).toBe("beat"); // heavier, fewer reps
+  });
+
+  it("describes the difference in the lift's unit", () => {
+    expect(describeDiff(compareToLast(lift(155, 6), last), "lb")).toBe("+5 lb · −1 rep · same sets");
+    expect(describeDiff(compareToLast(lift(150, 7), last), "lb")).toBe(
+      "same weight · same reps · same sets",
+    );
+  });
+
+  it("finds the entry before a moment", () => {
+    const a = entry({ id: 1, performed_at: "2026-11-01T18:00:00" });
+    const b = entry({ id: 2, performed_at: "2026-11-05T18:00:00" });
+    expect(entryBefore([b, a], "2026-11-04T00:00:00")?.id).toBe(1);
+    expect(entryBefore([b, a], "2026-11-30T00:00:00")?.id).toBe(2);
+    expect(entryBefore([b, a], "2026-10-01T00:00:00")).toBeUndefined();
   });
 });
