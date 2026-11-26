@@ -1,0 +1,36 @@
+[project]
+name = "overloader-api"
+version = "0.1.0"
+description = "Overloader API: email sign-in and lifting logs"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.165",
+  "uvicorn[standard]>=0.54",
+  "sqlalchemy>=2.1",
+  "psycopg[binary]>=3.3",
+  "alembic>=1.20",
+  "pydantic-settings>=2.16",
+  "email-validator>=2.2",
+  "pyjwt>=2.15",
+  "httpx>=0.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9", "ruff>=0.14"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
