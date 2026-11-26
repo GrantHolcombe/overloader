@@ -26,6 +26,25 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-26: Reviewing the agent's defaults instead of inheriting them
+
+**Situation:** To get a working app quickly, the agent picked several defaults while scaffolding
+and listed them on the roadmap as open for review rather than treating them as settled.
+
+**Decision:** I went through each one and kept all four:
+- **Sign-in lasts 30 days,** not Setups.Bike's 7. Re-entering an email code at the rack is
+  friction, and the token only opens your own lifting log.
+- **One weight × reps × sets row per entry** stays the main way to log. Per-set detail (drop
+  sets, pyramids) stays an optional Phase 1 feature.
+- **One chart point per day,** so logging an exercise twice in a session doesn't make the trend
+  line zigzag.
+- **Dark first, following the phone's light/dark setting,** with the orange accent from the logo.
+
+**Why:** Defaults become decisions whether or not anyone makes them. Having the agent flag its
+own guesses, and then confirming them, keeps the product calls mine.
+
+---
+
 ## 2026-11-26: Six code boxes and an in-app modal, from the first run-through
 
 **Situation:** After my first run of the app, two things felt off. The sign-in code was one text

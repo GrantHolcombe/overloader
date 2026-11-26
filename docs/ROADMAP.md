@@ -27,12 +27,14 @@ The live task list is the private GitHub Project board. This page is the overvie
 - Domain and final app name
 - Account deletion and data export; privacy policy
 
-## Defaults chosen during scaffolding (open for review)
+## Scaffolding defaults (reviewed 2026-11-26)
 
-These were picked by the agent to get started, not decided by Grant yet:
+The agent picked these to get started; Grant reviewed and kept them:
 
 - Tokens last 30 days (Setups.Bike uses 7) so a phone at the gym rarely has to sign in again.
 - A log entry is one weight × reps × sets row, matching the brief; per-set detail is Phase 1.
-- The exercise catalog is shared and seeded by migration.
 - Chart points are one per day (best entry for weight and 1RM, sum for volume).
 - Dark theme by default with a light theme from the OS setting; orange accent.
+
+Not changed in the review: the exercise catalog is shared and seeded by migration (per-user
+custom exercises are Phase 1).
