@@ -2,7 +2,15 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    model_validator,
+)
 
 Unit = Literal["lb", "kg"]
 
@@ -90,34 +98,81 @@ def _not_future(value: datetime | None) -> datetime | None:
 PerformedAt = Annotated[AwareDatetime, AfterValidator(_not_future)]
 
 
-class LogIn(BaseModel):
+class SetIn(BaseModel):
+    """One set of a per-set entry, in the entry's unit."""
+
     weight: Weight
     reps: Reps
-    sets: Sets
+
+
+SetDetails = Annotated[list[SetIn], Field(min_length=1, max_length=100)]
+
+
+class LogIn(BaseModel):
+    """Either quick (weight, reps and sets: every set the same) or per set (set_details, from
+    which the summary weight/reps/sets are worked out)."""
+
+    weight: Weight | None = None
+    reps: Reps | None = None
+    sets: Sets | None = None
+    set_details: SetDetails | None = None
     # Defaults to the user's unit; set it when logging a past entry in another unit.
     unit: Unit | None = None
     # Defaults to now. Set it to log a past workout.
     performed_at: PerformedAt | None = None
 
+    @model_validator(mode="after")
+    def _quick_or_per_set(self):
+        quick = (self.weight, self.reps, self.sets)
+        if self.set_details is not None:
+            if any(v is not None for v in quick):
+                raise ValueError("send weight/reps/sets or set_details, not both")
+        elif any(v is None for v in quick):
+            raise ValueError("weight, reps and sets are required (or send set_details)")
+        return self
+
 
 class LogUpdate(BaseModel):
-    """Any subset of an entry's fields; omitted fields stay as they are."""
+    """Any subset of an entry's fields; omitted fields stay as they are.
+
+    set_details replaces every set (and makes it a per-set entry). Sending weight, reps or sets
+    without set_details makes it a quick entry again.
+    """
 
     weight: Weight | None = None
     reps: Reps | None = None
     sets: Sets | None = None
+    set_details: SetDetails | None = None
     unit: Unit | None = None
     performed_at: PerformedAt | None = None
+
+    @model_validator(mode="after")
+    def _not_both(self):
+        if self.set_details is not None and any(
+            v is not None for v in (self.weight, self.reps, self.sets)
+        ):
+            raise ValueError("send weight/reps/sets or set_details, not both")
+        return self
+
+
+class SetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    weight: float
+    reps: int
 
 
 class LogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     exercise_id: int
+    # For a per-set entry, these three summarize set_details: the heaviest set's weight and
+    # reps, and how many sets.
     weight: float
     unit: Unit
     reps: int
     sets: int
+    # Empty for a quick entry (every set the same).
+    set_details: list[SetOut]
     performed_at: datetime
 
 

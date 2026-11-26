@@ -2,13 +2,21 @@
 
 export type Unit = "lb" | "kg";
 
+export interface SetValues {
+  weight: number;
+  reps: number;
+}
+
 export interface LogEntry {
   id: number;
   exercise_id: number;
+  /** For a per-set entry: the heaviest set's weight and reps, and the number of sets. */
   weight: number;
   unit: Unit;
   reps: number;
   sets: number;
+  /** Empty for a quick entry (every set the same weight and reps). */
+  set_details: SetValues[];
   performed_at: string;
 }
 
@@ -17,7 +25,7 @@ export type Metric = "top" | "e1rm" | "volume";
 export const METRICS: { value: Metric; label: string; hint: string }[] = [
   { value: "top", label: "Top weight", hint: "Heaviest weight logged that day" },
   { value: "e1rm", label: "Est. 1RM", hint: "Estimated one-rep max (Epley formula)" },
-  { value: "volume", label: "Volume", hint: "Weight × reps × sets, summed for the day" },
+  { value: "volume", label: "Volume", hint: "Weight × reps of every set, summed for the day" },
 ];
 
 const LB_PER_KG = 2.2046226218;
@@ -32,11 +40,61 @@ export function estimatedOneRepMax(weight: number, reps: number): number {
   return reps <= 1 ? weight : weight * (1 + reps / 30);
 }
 
+/** A quick entry or a lift on the form; set_details, when present, wins over weight/reps/sets. */
+export interface LiftValues {
+  weight: number;
+  unit: Unit;
+  reps: number;
+  sets: number;
+  set_details?: SetValues[];
+}
+
+/** Every set of a lift, in its own unit (a quick entry's sets are all the same). */
+export function setsOf(lift: LiftValues): SetValues[] {
+  if (lift.set_details?.length) return lift.set_details;
+  return Array.from({ length: lift.sets }, () => ({ weight: lift.weight, reps: lift.reps }));
+}
+
+/** A quick summary of per-set detail, as the API stores it: the heaviest set (the first one
+ * if several tie) and how many sets. Used when switching the form from per set to quick. */
+export function summarizeSets(sets: SetValues[]): { weight: number; reps: number; sets: number } {
+  const top = sets.reduce((best, s) => (s.weight > best.weight ? s : best), sets[0]!);
+  return { weight: top.weight, reps: top.reps, sets: sets.length };
+}
+
+/** True when every set has a weight of 0–5000 and 1–1000 whole reps (what the API accepts). */
+export function validSets(sets: SetValues[]): boolean {
+  return (
+    sets.length >= 1 &&
+    sets.length <= 100 &&
+    sets.every(
+      (s) =>
+        Number.isFinite(s.weight) &&
+        s.weight >= 0 &&
+        s.weight <= 5000 &&
+        Number.isInteger(s.reps) &&
+        s.reps >= 1 &&
+        s.reps <= 1000,
+    )
+  );
+}
+
+/** Top weight, best est. 1RM and total volume of a lift, converted to `unit`. */
+export function liftMetrics(lift: LiftValues, unit: Unit): Record<Metric, number> {
+  let top = 0;
+  let e1rm = 0;
+  let volume = 0;
+  for (const set of setsOf(lift)) {
+    const w = convert(set.weight, lift.unit, unit);
+    top = Math.max(top, w);
+    e1rm = Math.max(e1rm, estimatedOneRepMax(w, set.reps));
+    volume += w * set.reps;
+  }
+  return { top, e1rm, volume };
+}
+
 export function entryValue(entry: LogEntry, metric: Metric, unit: Unit): number {
-  const w = convert(entry.weight, entry.unit, unit);
-  if (metric === "top") return w;
-  if (metric === "e1rm") return estimatedOneRepMax(w, entry.reps);
-  return w * entry.reps * entry.sets;
+  return liftMetrics(entry, unit)[metric];
 }
 
 /** Local calendar day, YYYY-MM-DD, so a late-night session doesn't land on "tomorrow" in UTC. */
@@ -114,10 +172,19 @@ export function formatWeight(weight: number, unit: Unit): string {
 
 /** Compact form for lists that show several entries on one line: "105 lb × 8 × 3". */
 export function formatShort(e: LogEntry): string {
+  if (e.set_details.length) return formatSets(e);
   return `${formatWeight(e.weight, e.unit)} × ${e.reps} × ${e.sets}`;
 }
 
+const num = (n: number) => (Math.round(n * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+/** Per-set entries list each set: "135×10, 155×6, 145×8 lb". */
+function formatSets(e: LiftValues): string {
+  return `${setsOf(e).map((s) => `${num(s.weight)}×${s.reps}`).join(", ")} ${e.unit}`;
+}
+
 export function formatEntry(e: LogEntry): string {
+  if (e.set_details.length) return `${e.sets} ${e.sets === 1 ? "set" : "sets"}: ${formatSets(e)}`;
   return `${formatWeight(e.weight, e.unit)} × ${e.reps} reps × ${e.sets} ${e.sets === 1 ? "set" : "sets"}`;
 }
 
@@ -161,16 +228,9 @@ export const PR_LABELS: Record<PRKind, string> = {
 // counts as a tie, and a tie isn't a new record.
 const EPSILON_KG = 0.01;
 
-export interface LiftValues {
-  weight: number;
-  unit: Unit;
-  reps: number;
-  sets: number;
-}
-
 function inKg(lift: LiftValues): Record<PRKind, number> {
-  const w = convert(lift.weight, lift.unit, "kg");
-  return { weight: w, e1rm: estimatedOneRepMax(w, lift.reps), volume: w * lift.reps * lift.sets };
+  const m = liftMetrics(lift, "kg");
+  return { weight: m.top, e1rm: m.e1rm, volume: m.volume };
 }
 
 const KINDS: PRKind[] = ["weight", "e1rm", "volume"];
@@ -216,6 +276,11 @@ export function entryBefore(entries: LogEntry[], iso: string): LogEntry | undefi
 
 export interface Comparison {
   status: "beat" | "match" | "below";
+  /**
+   * "quick" when both are quick entries: weight and reps per set. "sets" when either is per
+   * set: the top set's weight and the total reps.
+   */
+  basis: "quick" | "sets";
   /** In the lift's own unit. */
   weightDiff: number;
   repsDiff: number;
@@ -234,20 +299,30 @@ export function compareToLast(lift: LiftValues, last: LogEntry): Comparison {
   else if (now.e1rm < then.e1rm - EPSILON_KG) status = "below";
   else if (now.volume > then.volume + EPSILON_KG) status = "beat";
   else if (now.volume < then.volume - EPSILON_KG) status = "below";
+  const perSet = Boolean(lift.set_details?.length || last.set_details.length);
+  const mine = setsOf(lift);
+  const theirs = setsOf(last);
+  const top = (sets: SetValues[], unit: Unit) =>
+    Math.max(...sets.map((x) => convert(x.weight, unit, lift.unit)));
+  const totalReps = (sets: SetValues[]) => sets.reduce((sum, x) => sum + x.reps, 0);
   return {
     status,
-    weightDiff: Math.round((lift.weight - convert(last.weight, last.unit, lift.unit)) * 100) / 100,
-    repsDiff: lift.reps - last.reps,
-    setsDiff: lift.sets - last.sets,
+    basis: perSet ? "sets" : "quick",
+    weightDiff: Math.round((top(mine, lift.unit) - top(theirs, last.unit)) * 100) / 100,
+    repsDiff: perSet ? totalReps(mine) - totalReps(theirs) : lift.reps - last.reps,
+    setsDiff: mine.length - theirs.length,
   };
 }
 
-/** For example "+5 lb · −1 rep · same sets". */
+/** For example "+5 lb · −1 rep · same sets", or "top set +5 lb · +6 total reps · same sets". */
 export function describeDiff(c: Comparison, unit: Unit): string {
   const signed = (n: number, text: string) => `${n > 0 ? "+" : "−"}${text}`;
   const count = (n: number, one: string, many: string) =>
     n === 0 ? `same ${many}` : signed(n, `${Math.abs(n)} ${Math.abs(n) === 1 ? one : many}`);
-  const weight =
+  const weightText =
     c.weightDiff === 0 ? "same weight" : signed(c.weightDiff, formatWeight(Math.abs(c.weightDiff), unit));
-  return [weight, count(c.repsDiff, "rep", "reps"), count(c.setsDiff, "set", "sets")].join(" · ");
+  const weight = c.basis === "sets" ? `top set ${weightText}` : weightText;
+  const reps =
+    c.basis === "sets" ? count(c.repsDiff, "total rep", "total reps") : count(c.repsDiff, "rep", "reps");
+  return [weight, reps, count(c.setsDiff, "set", "sets")].join(" · ");
 }

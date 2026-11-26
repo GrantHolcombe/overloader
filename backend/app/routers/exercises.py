@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 
 from app.auth import DB, CurrentUser
 from app.config import get_settings
-from app.models import Exercise, LogEntry, User
+from app.models import Exercise, LogEntry, LogSet, User
 from app.schemas import (
     ExerciseIn,
     ExerciseOut,
@@ -17,6 +17,7 @@ from app.schemas import (
     LogUpdate,
     LogWithExercise,
     RecentExercise,
+    SetIn,
 )
 
 router = APIRouter(prefix="/api", tags=["exercises"])
@@ -154,17 +155,28 @@ def list_logs(exercise_id: int, user: CurrentUser, db: DB) -> list[LogOut]:
     return [LogOut.model_validate(r) for r in rows]
 
 
+def _set_details(db: DB, entry: LogEntry, sets: list[SetIn]) -> None:
+    """Makes `entry` a per-set entry: replaces its sets and refreshes the summary columns
+    (the heaviest set's weight and reps; the first one if several tie, and the set count)."""
+    if entry.set_details:
+        entry.set_details.clear()
+        db.flush()  # delete the old sets first, so positions can be reused
+    entry.set_details = [
+        LogSet(position=i, weight=s.weight, reps=s.reps) for i, s in enumerate(sets, start=1)
+    ]
+    top = max(sets, key=lambda s: s.weight)  # max() keeps the first of equal weights
+    entry.weight, entry.reps, entry.sets = top.weight, top.reps, len(sets)
+
+
 @router.post("/exercises/{exercise_id}/logs", status_code=status.HTTP_201_CREATED)
 def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB) -> LogOut:
+    """Logs either a quick entry (weight x reps x sets) or a per-set one (set_details)."""
     _exercise_or_404(db, user, exercise_id)
-    entry = LogEntry(
-        user_id=user.id,
-        exercise_id=exercise_id,
-        weight=body.weight,
-        unit=body.unit or user.unit,
-        reps=body.reps,
-        sets=body.sets,
-    )
+    entry = LogEntry(user_id=user.id, exercise_id=exercise_id, unit=body.unit or user.unit)
+    if body.set_details is not None:
+        _set_details(db, entry, body.set_details)
+    else:
+        entry.weight, entry.reps, entry.sets = body.weight, body.reps, body.sets
     if body.performed_at is not None:
         entry.performed_at = body.performed_at
     db.add(entry)
@@ -203,14 +215,25 @@ def logs_in_range(
 
 @router.patch("/logs/{log_id}")
 def update_log(log_id: int, body: LogUpdate, user: CurrentUser, db: DB) -> LogOut:
-    """Fixes a typo or moves an entry to another date. Only the fields sent change."""
+    """Fixes a typo or moves an entry to another date. Only the fields sent change.
+
+    set_details replaces every set; weight/reps/sets (without set_details) turn a per-set entry
+    back into a quick one.
+    """
     entry = db.scalar(select(LogEntry).where(LogEntry.id == log_id, LogEntry.user_id == user.id))
     if entry is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such log entry")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         if value is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{field} can't be empty")
-        setattr(entry, field, value)
+    if "set_details" in changes:
+        _set_details(db, entry, body.set_details)
+    elif {"weight", "reps", "sets"} & changes.keys() and entry.set_details:
+        entry.set_details.clear()
+    for field in ("weight", "reps", "sets", "unit", "performed_at"):
+        if field in changes:
+            setattr(entry, field, changes[field])
     db.commit()
     db.refresh(entry)
     return LogOut.model_validate(entry)

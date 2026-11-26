@@ -49,6 +49,12 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Custom exercises** show a small accent `.tag` ("Custom") before their detail line, a
   "Custom" filter chip appears first once you have one, and an empty search offers to add the
   query as a custom exercise.
+- **Quick / Per set:** a segmented control at the top of the log form and the edit dialog.
+  Per set uses `components/SetsEditor.vue`: one row per set (number, weight, reps, remove) with
+  plain number inputs rather than steppers so four columns fit at phone width; "+ Add set"
+  copies the last set. Switching to per set expands the quick numbers into identical sets;
+  switching back keeps the heaviest set and the count. The form opens in whichever mode last
+  time used.
 - **Records and "last time":** `lib/lifting.ts` works them out from the history (est. 1RM
   decides "beat / match / below"; ties and the very first entry are never records). On the log
   form a `.nudge` card under the steppers updates live: neutral for match/below, green title for

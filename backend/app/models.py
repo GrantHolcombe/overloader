@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    UniqueConstraint,
     func,
     text,
 )
@@ -103,6 +104,14 @@ class LogEntry(Base):
     )
 
     exercise: Mapped[Exercise] = relationship()
+    # Empty for a quick entry (every set the same). Otherwise one row per set, and the columns
+    # above are a summary: the heaviest set's weight and reps, and the number of sets.
+    set_details: Mapped[list["LogSet"]] = relationship(
+        order_by="LogSet.position",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+    )
 
     __table_args__ = (
         CheckConstraint("weight >= 0 AND weight <= 5000", name="log_entry_weight"),
@@ -110,4 +119,23 @@ class LogEntry(Base):
         CheckConstraint("reps BETWEEN 1 AND 1000", name="log_entry_reps"),
         CheckConstraint("sets BETWEEN 1 AND 100", name="log_entry_sets"),
         Index("log_entry_user_exercise_time", "user_id", "exercise_id", "performed_at"),
+    )
+
+
+class LogSet(Base):
+    """One set of a per-set entry, in the entry's unit."""
+
+    __tablename__ = "log_set"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    log_entry_id: Mapped[int] = mapped_column(ForeignKey("log_entry.id", ondelete="CASCADE"))
+    position: Mapped[int] = mapped_column(Integer)
+    weight: Mapped[Decimal] = mapped_column(Numeric(7, 2))
+    reps: Mapped[int] = mapped_column(Integer)
+
+    __table_args__ = (
+        UniqueConstraint("log_entry_id", "position", name="log_set_entry_position"),
+        CheckConstraint("position BETWEEN 1 AND 100", name="log_set_position"),
+        CheckConstraint("weight >= 0 AND weight <= 5000", name="log_set_weight"),
+        CheckConstraint("reps BETWEEN 1 AND 1000", name="log_set_reps"),
     )

@@ -4,6 +4,7 @@ import ConfirmDialog from "../components/ConfirmDialog.vue";
 import DateField from "../components/DateField.vue";
 import EditEntryDialog, { type EntryPatch } from "../components/EditEntryDialog.vue";
 import ExerciseFormDialog from "../components/ExerciseFormDialog.vue";
+import SetsEditor from "../components/SetsEditor.vue";
 import Stepper from "../components/Stepper.vue";
 import { useRouter } from "vue-router";
 import { api, type Exercise, type ExerciseFields } from "../lib/api";
@@ -19,9 +20,13 @@ import {
   personalRecords,
   PR_LABELS,
   relativeDay,
+  setsOf,
+  summarizeSets,
   today,
+  validSets,
   weightStep,
   wouldSetRecords,
+  type SetValues,
   type LogEntry,
   type PRKind,
 } from "../lib/lifting";
@@ -45,9 +50,29 @@ const toast = ref("");
 const toastKind = ref<"ok" | "pr">("ok");
 const unit = computed(() => session.user?.unit ?? "lb");
 
+// Quick: one weight x reps, done for every set. Per set: each set has its own weight and reps.
+const mode = ref<"quick" | "sets">("quick");
 const weight = ref(0);
 const reps = ref(8);
 const sets = ref(3);
+const setRows = ref<SetValues[]>([]);
+
+const round = (n: number) => Math.round(n * 100) / 100;
+
+function switchMode(next: "quick" | "sets") {
+  if (next === mode.value) return;
+  if (next === "sets") {
+    // Start with the quick numbers as that many identical sets, ready to adjust.
+    setRows.value = setsOf({ weight: weight.value, unit: unit.value, reps: reps.value, sets: sets.value });
+  } else if (setRows.value.length) {
+    ({ weight: weight.value, reps: reps.value, sets: sets.value } = summarizeSets(setRows.value));
+  }
+  mode.value = next;
+}
+
+const formValid = computed(() =>
+  mode.value === "sets" ? validSets(setRows.value) : validSets([{ weight: weight.value, reps: reps.value }]),
+);
 // The day this entry is for. Stays put after logging, so backfilling a past workout is quick;
 // a page reload starts from today again.
 const logDay = ref(today());
@@ -88,6 +113,7 @@ const lift = computed(() => ({
   unit: unit.value,
   reps: reps.value,
   sets: sets.value,
+  ...(mode.value === "sets" ? { set_details: setRows.value } : {}),
 }));
 const priorEntries = computed(() => {
   if (isToday.value) return logs.value;
@@ -105,10 +131,19 @@ const NUDGE = { beat: "Beats last time", match: "Matches last time", below: "Bel
 
 function prefill() {
   // Start from last time, so matching it is one tap and beating it is two.
-  if (!last.value) return;
-  weight.value = Math.round(convert(last.value.weight, last.value.unit, unit.value) * 100) / 100;
-  reps.value = last.value.reps;
-  sets.value = last.value.sets;
+  // A per-set last time starts the form in per-set mode with the same sets.
+  const prev = last.value;
+  if (!prev) return;
+  weight.value = round(convert(prev.weight, prev.unit, unit.value));
+  reps.value = prev.reps;
+  sets.value = prev.sets;
+  if (prev.set_details.length) {
+    setRows.value = prev.set_details.map((x) => ({
+      weight: round(convert(x.weight, prev.unit, unit.value)),
+      reps: x.reps,
+    }));
+    mode.value = "sets";
+  }
 }
 
 onMounted(async () => {
@@ -124,10 +159,12 @@ async function save() {
   error.value = "";
   saving.value = true;
   try {
+    const body =
+      mode.value === "sets"
+        ? { set_details: setRows.value }
+        : { weight: weight.value, reps: reps.value, sets: sets.value };
     const entry = await api.addLog(props.id, {
-      weight: weight.value,
-      reps: reps.value,
-      sets: sets.value,
+      ...body,
       ...(isToday.value ? {} : { performed_at: atDay(logDay.value) }),
     });
     logs.value = sortLogs([entry, ...logs.value]);
@@ -264,17 +301,28 @@ const time = (iso: string) =>
     </section>
 
     <form class="stack log-form" @submit.prevent="save">
-      <Stepper
-        v-model="weight"
-        :label="`Weight (${unit})`"
-        :step="weightStep(unit)"
-        :max="5000"
-        decimals
-      />
-      <div class="pair">
-        <Stepper v-model="reps" label="Reps" :min="1" :max="1000" />
-        <Stepper v-model="sets" label="Sets" :min="1" :max="100" />
+      <div class="segmented" role="group" aria-label="How to log">
+        <button type="button" :aria-pressed="mode === 'quick'" @click="switchMode('quick')">
+          Quick
+        </button>
+        <button type="button" :aria-pressed="mode === 'sets'" @click="switchMode('sets')">
+          Per set
+        </button>
       </div>
+      <template v-if="mode === 'quick'">
+        <Stepper
+          v-model="weight"
+          :label="`Weight (${unit})`"
+          :step="weightStep(unit)"
+          :max="5000"
+          decimals
+        />
+        <div class="pair">
+          <Stepper v-model="reps" label="Reps" :min="1" :max="1000" />
+          <Stepper v-model="sets" label="Sets" :min="1" :max="100" />
+        </div>
+      </template>
+      <SetsEditor v-else v-model="setRows" :unit="unit" id-prefix="log" />
       <div
         v-if="comparison"
         class="nudge"
@@ -290,7 +338,7 @@ const time = (iso: string) =>
           Today
         </button>
       </DateField>
-      <button class="btn btn-primary btn-block" :disabled="saving || !logDay">
+      <button class="btn btn-primary btn-block" :disabled="saving || !logDay || !formValid">
         {{ saving ? "Saving…" : isToday ? "Log it" : `Log for ${formatDay(logDay)}` }}
       </button>
       <p v-if="error" class="error" role="alert">{{ error }}</p>

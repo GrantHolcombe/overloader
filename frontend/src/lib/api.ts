@@ -1,4 +1,4 @@
-import type { LogEntry, Unit } from "./lifting";
+import type { LogEntry, SetValues, Unit } from "./lifting";
 import { session, signOut, type User } from "./session";
 
 // Empty in dev (Vite proxies /api to FastAPI). Set VITE_API_BASE when the API lives elsewhere.
@@ -68,6 +68,10 @@ export interface ExerciseFields {
   muscle_group: (typeof MUSCLE_GROUPS)[number];
 }
 
+export type LogBody =
+  | { weight: number; reps: number; sets: number }
+  | { set_details: SetValues[] };
+
 export interface RecentExercise {
   exercise: Exercise;
   last: LogEntry;
@@ -96,13 +100,10 @@ export const api = {
       `/api/logs?${new URLSearchParams({ start, end })}`,
     ),
   logs: (exerciseId: number) => request<LogEntry[]>(`/api/exercises/${exerciseId}/logs`),
-  addLog: (
-    exerciseId: number,
-    body: { weight: number; reps: number; sets: number; performed_at?: string },
-  ) => request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body }),
-  updateLog: (
-    id: number,
-    body: Partial<Pick<LogEntry, "weight" | "reps" | "sets" | "unit" | "performed_at">>,
-  ) => request<LogEntry>(`/api/logs/${id}`, { method: "PATCH", body }),
+  /** Quick (weight, reps, sets) or per set (set_details), not both. */
+  addLog: (exerciseId: number, body: LogBody & { performed_at?: string }) =>
+    request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body }),
+  updateLog: (id: number, body: Partial<LogBody> & { unit?: Unit; performed_at?: string }) =>
+    request<LogEntry>(`/api/logs/${id}`, { method: "PATCH", body }),
   deleteLog: (id: number) => request<void>(`/api/logs/${id}`, { method: "DELETE" }),
 };

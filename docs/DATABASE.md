@@ -8,6 +8,7 @@ Update this page in the same change as any migration.
 erDiagram
     app_user ||--o{ log_entry : logs
     app_user ||--o{ exercise : "creates (custom)"
+    log_entry ||--o{ log_set : "per-set detail"
     exercise ||--o{ log_entry : "logged as"
 
     app_user {
@@ -44,6 +45,13 @@ erDiagram
         int sets "1-100"
         timestamptz performed_at
     }
+    log_set {
+        int id PK
+        int log_entry_id FK "cascade delete"
+        int position "1-100, unique per entry"
+        numeric weight "0-5000, entry's unit"
+        int reps "1-1000"
+    }
 ```
 
 ## Notes
@@ -67,3 +75,8 @@ erDiagram
   it was entered in, so switching the display unit never rewrites history; the app converts for
   charts. Index `(user_id, exercise_id, performed_at)` serves the history, chart and "last time"
   queries.
+- **log_set** (migration `0003`): per-set detail. A *quick* entry has no rows here (every set is
+  the same weight × reps). A *per-set* entry has one row per set, and its `log_entry` weight /
+  reps / sets become a summary the API maintains: the heaviest set's weight and reps (the first
+  one if several tie) and the number of sets. Charts and records use the sets themselves (top
+  weight, best est. 1RM of any set, volume summed over sets).

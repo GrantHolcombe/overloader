@@ -8,6 +8,9 @@ import {
   describeDiff,
   shiftDay,
   entryBefore,
+  formatEntry,
+  formatShort,
+  liftMetrics,
   personalRecords,
   today,
   wouldSetRecords,
@@ -25,6 +28,7 @@ const entry = (over: Partial<LogEntry>): LogEntry => ({
   unit: "lb",
   reps: 5,
   sets: 3,
+  set_details: [],
   performed_at: "2026-11-20T18:00:00",
   ...over,
 });
@@ -175,5 +179,47 @@ describe("compared with last time", () => {
     expect(entryBefore([b, a], "2026-11-04T00:00:00")?.id).toBe(1);
     expect(entryBefore([b, a], "2026-11-30T00:00:00")?.id).toBe(2);
     expect(entryBefore([b, a], "2026-10-01T00:00:00")).toBeUndefined();
+  });
+});
+
+describe("per-set entries", () => {
+  const pyramid = entry({
+    weight: 155,
+    reps: 6,
+    sets: 3,
+    set_details: [
+      { weight: 135, reps: 10 },
+      { weight: 155, reps: 6 },
+      { weight: 145, reps: 8 },
+    ],
+  });
+
+  it("measures each set: top weight, best est. 1RM, summed volume", () => {
+    const m = liftMetrics(pyramid, "lb");
+    expect(m.top).toBe(155);
+    expect(m.e1rm).toBeCloseTo(186, 2); // best set on Epley: 155 × 6 (145 × 8 is 183.7)
+    expect(m.volume).toBe(135 * 10 + 155 * 6 + 145 * 8);
+  });
+
+  it("formats each set", () => {
+    expect(formatEntry(pyramid)).toBe("3 sets: 135×10, 155×6, 145×8 lb");
+    expect(formatShort(pyramid)).toBe("135×10, 155×6, 145×8 lb");
+  });
+
+  it("compares by top set and total reps when either side is per set", () => {
+    const quickLast = entry({ weight: 150, reps: 6, sets: 3 }); // est. 1RM 180, 18 reps
+    const c = compareToLast(
+      { weight: 0, unit: "lb", reps: 0, sets: 0, set_details: pyramid.set_details },
+      quickLast,
+    );
+    expect(c.basis).toBe("sets");
+    expect(c.status).toBe("beat");
+    expect(describeDiff(c, "lb")).toBe("top set +5 lb · +6 total reps · same sets");
+  });
+
+  it("counts per-set entries in records", () => {
+    const first = entry({ id: 1, performed_at: "2026-11-01T18:00:00", weight: 150, reps: 5, sets: 3 });
+    const second = { ...pyramid, id: 2, performed_at: "2026-11-05T18:00:00" };
+    expect(personalRecords([first, second]).get(2)).toEqual(["weight", "e1rm", "volume"]);
   });
 });
