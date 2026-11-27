@@ -16,6 +16,7 @@ export const router = createRouter({
       component: () => import("./views/ProgressView.vue"),
       props: (route) => ({ id: Number(route.params.id) }),
     },
+    { path: "/summary", component: () => import("./views/SummaryView.vue") },
     { path: "/settings", component: () => import("./views/SettingsView.vue") },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],

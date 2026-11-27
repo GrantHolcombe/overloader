@@ -1,4 +1,5 @@
 import type { LogEntry, SetValues, Unit } from "./lifting";
+import type { QueuedLog, SendResult } from "./outbox";
 import { session, signOut, type User } from "./session";
 
 // Empty in dev (Vite proxies /api to FastAPI). Set VITE_API_BASE when the API lives elsewhere.
@@ -13,20 +14,29 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  init: { method?: string; body?: unknown; timeoutMs?: number } = {},
+): Promise<T> {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   if (session.token) headers.Authorization = `Bearer ${session.token}`;
 
+  // A weak signal can leave a request hanging for a minute; give up sooner when asked to.
+  const controller = new AbortController();
+  const timer = init.timeoutMs ? setTimeout(() => controller.abort(), init.timeoutMs) : undefined;
   let res: Response;
   try {
     res = await fetch(BASE + path, {
       method: init.method ?? "GET",
       headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      signal: controller.signal,
     });
   } catch {
     throw new ApiError(0, "Can't reach the server. Check your connection.");
+  } finally {
+    clearTimeout(timer);
   }
 
   if (res.status === 401 && session.token) {
@@ -100,10 +110,24 @@ export const api = {
       `/api/logs?${new URLSearchParams({ start, end })}`,
     ),
   logs: (exerciseId: number) => request<LogEntry[]>(`/api/exercises/${exerciseId}/logs`),
-  /** Quick (weight, reps, sets) or per set (set_details), not both. */
-  addLog: (exerciseId: number, body: LogBody & { performed_at?: string }) =>
-    request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body }),
+  /**
+   * Quick (weight, reps, sets) or per set (set_details), not both. A client_id makes retries
+   * safe: sending it again returns the saved entry. Gives up after 8 s so the entry can be
+   * queued on the phone instead (see outbox.ts).
+   */
+  addLog: (exerciseId: number, body: LogBody & { performed_at?: string; client_id?: string }) =>
+    request<LogEntry>(`/api/exercises/${exerciseId}/logs`, { method: "POST", body, timeoutMs: 8000 }),
   updateLog: (id: number, body: Partial<LogBody> & { unit?: Unit; performed_at?: string }) =>
     request<LogEntry>(`/api/logs/${id}`, { method: "PATCH", body }),
   deleteLog: (id: number) => request<void>(`/api/logs/${id}`, { method: "DELETE" }),
 };
+
+/** Sends one queued entry for the outbox, reporting failures instead of throwing. */
+export async function sendQueued(item: QueuedLog): Promise<SendResult> {
+  try {
+    return { ok: true, entry: await api.addLog(item.exercise_id, item.body) };
+  } catch (e) {
+    const status = e instanceof ApiError ? e.status : 0;
+    return { ok: false, status, message: (e as Error).message };
+  }
+}

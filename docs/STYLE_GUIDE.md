@@ -8,6 +8,15 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Numbers first.** Weight, reps and sets are the biggest text on the logging screen.
 - **One primary action per screen** (orange `btn-primary`): "Email me a code", "Sign in", "Log it".
 - **Mobile-first**, single column, max width 560px, 16px gutters, safe-area insets respected.
+- **No zoom, vertical scrolling only** (Grant's call, 2026-11-27): fast + / − taps were zooming
+  iPhones. The page is `touch-action: pan-y` with `overflow-x: clip`, controls are
+  `touch-action: manipulation`, and the viewport meta sets `maximum-scale=1, user-scalable=no`.
+  Sideways scrollers like `.chips` still work. Keep form fields at 16px or larger, or iOS zooms
+  in on focus.
+- **Offline is normal.** A log that can't reach the server is saved on the phone
+  (`lib/outbox.ts`), shown in History as "saved on this phone, waiting to sync" (accent text,
+  not editable, × removes it), and a banner above every screen counts what's waiting. Say
+  "saved on this phone", not "error".
 
 ## Tokens
 
@@ -41,6 +50,11 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
     (`ExerciseFormDialog.vue`, which creates/edits custom exercises).
   - `EditEntryDialog.vue` for editing a log entry. Steppers stack one per row inside a modal,
     since two side by side leave the number box too narrow at phone width.
+- **Training summary** (`views/SummaryView.vue`): a 2×2 grid of stat cards (label, big number,
+  a "vs last week" line, green when up), then one row per muscle group with a thick accent bar
+  for the week shown over a thin `--border` bar for the week before, on one shared scale. The six
+  main groups always show ("Not trained" in muted text), so a skipped group stands out. The
+  numbers are always written out; the bars are decoration (`aria-hidden`).
 - **Dates:** `components/DateField.vue`, a native date input that never allows a day after
   today. `max` greys out future days on Chrome/Android; iOS Safari's picker ignores `max`, so a
   future pick snaps back to today with a short note. It also undoes iOS's wide intrinsic width

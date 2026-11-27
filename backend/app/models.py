@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -13,6 +14,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -102,6 +104,9 @@ class LogEntry(Base):
     performed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    # Picked by the app for each new entry, so a retried request (offline queue, lost reply)
+    # returns the entry already saved instead of logging it twice. Unique per user when set.
+    client_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
     exercise: Mapped[Exercise] = relationship()
     # Empty for a quick entry (every set the same). Otherwise one row per set, and the columns
@@ -119,6 +124,13 @@ class LogEntry(Base):
         CheckConstraint("reps BETWEEN 1 AND 1000", name="log_entry_reps"),
         CheckConstraint("sets BETWEEN 1 AND 100", name="log_entry_sets"),
         Index("log_entry_user_exercise_time", "user_id", "exercise_id", "performed_at"),
+        Index(
+            "log_entry_user_client_id",
+            "user_id",
+            "client_id",
+            unique=True,
+            postgresql_where=text("client_id IS NOT NULL"),
+        ),
     )
 
 

@@ -169,9 +169,10 @@ function toggleEquipment(type: string) {
     <template v-else-if="!searching && (recent.length || viewDay)">
       <div class="section-head">
         <h2>{{ viewDay ? formatDay(viewDay) : "Recent" }}</h2>
-        <button v-if="!viewDay" type="button" class="btn btn-ghost link" @click="openDay(today())">
-          View a day
-        </button>
+        <span v-if="!viewDay" class="links">
+          <RouterLink to="/summary" class="btn btn-ghost link">This week</RouterLink>
+          <button type="button" class="btn btn-ghost link" @click="openDay(today())">View a day</button>
+        </span>
         <button v-else type="button" class="btn btn-ghost link" @click="openDay(null)">
           Back to recent
         </button>
@@ -279,6 +280,10 @@ function toggleEquipment(type: string) {
   padding: 0 4px;
   color: var(--accent);
   font-size: 0.95rem;
+}
+.links {
+  display: flex;
+  gap: 8px;
 }
 .day-list {
   margin-top: 12px;
