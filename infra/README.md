@@ -34,14 +34,23 @@ Do these in order. Steps marked 🧑 are Grant's; the rest Claude can do or chec
 
 ### 1. 🧑 Neon: production connection strings
 
-In the Neon console, project **overloader**, open the **production** branch (separate from dev
-and test) and use **Connect** to copy two strings for the owner role `neondb_owner`:
+The overloader project's branches (set up 2026-11-27):
+
+| Branch | Database | Used by |
+| --- | --- | --- |
+| **prod** (root, default) | `overloader` | production; the API and migrations |
+| **dev** (child of prod) | `neondb` | local development (`backend/.env` `DATABASE_URL`) |
+| **test** (child of prod) | `neondb` | pytest (`TEST_DATABASE_URL`); wiped every run |
+
+New branches copy their parent's data *and passwords*, so `prod`'s `neondb_owner` password was
+reset after `dev` was branched from it. Neon's create-branch dialog defaults to auto-deleting the
+branch after a day: set it to **Never** for anything long-lived.
+
+In the Neon console use **Connect** with branch **prod**, database **overloader**, role
+`neondb_owner`, and copy two strings:
 
 - **Direct** (connection pooling *off*): for migrations.
 - **Pooled** (pooling *on*, host contains `-pooler`): the base for the API's own string in step 5.
-
-Keep them in your password manager. They don't need to be in `backend/.env`. (Today `.env`'s
-`DATABASE_URL` is still the dev database, which is right for local work.)
 
 ### 2. 🧑 GitHub: the migration secret
 
@@ -104,7 +113,7 @@ one now.
 
 3. Build the API's connection string from the **pooled** owner string: replace
    `neondb_owner:<owner password>` with `overloader_app:<new password>`. Everything after the `@`
-   (the `-pooler` host, `/neondb?sslmode=require…`) stays the same. Save it in your password
+   (the `-pooler` host, `/overloader?sslmode=require…`) stays the same. Save it in your password
    manager.
 
 Also make a **new JWT secret** for production (not the dev one):
