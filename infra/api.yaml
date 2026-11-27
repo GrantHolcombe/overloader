@@ -1,16 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Overloader API: the FastAPI container image on Lambda (Lambda Web Adapter, ARM64) behind a
-  Function URL. Stack 2 of 2; deploy in us-west-2 after registry.yaml and after the first image is
-  pushed. Secrets are NoEcho parameters you type in the console; they never go in git or chat.
-  See infra/README.md.
+  Function URL, in us-west-2. Created once by hand (it needs the secrets); after that every deploy
+  updates it from GitHub Actions (deploy-api.yml), changing only ImageTag, so the stack always
+  matches what's running. Secrets are NoEcho parameters typed in the console once; deploys keep
+  their values. See infra/README.md.
 
 Parameters:
   ImageTag:
     Type: String
     Description: >-
-      Git commit of the image to run (the deploy workflow prints it). On later stack updates use
-      the tag that's live now (Lambda console > Image), or the update rolls the code back.
+      Git commit of the image to run. Set by the deploy workflow; when updating the stack by
+      hand, keep the current value.
   DatabaseUrl:
     Type: String
     NoEcho: true
@@ -44,8 +45,10 @@ Parameters:
       403 (except /api/health). Leave empty until Cloudflare is in front.
   ClientIpHeader:
     Type: String
-    Default: cf-connecting-ip
-    Description: Header holding the user's IP behind Cloudflare (for the sign-in rate limit).
+    Default: x-client-ip
+    Description: >-
+      Header holding the user's IP (for the sign-in rate limit). The overloader-edge Worker sets
+      x-client-ip from Cloudflare's CF-Connecting-IP; trust it only with OriginSecret set.
   MemorySize:
     Type: Number
     Default: 512
@@ -56,6 +59,10 @@ Parameters:
     MinValue: 1
     MaxValue: 50
     Description: Most copies of the function that can run at once (a cap on runaway traffic and cost).
+  ExecutionRoleName:
+    Type: String
+    Default: overloader-api-exec
+    Description: The function's IAM role, from the registry stack.
   ApiEnabled:
     Type: String
     AllowedValues: ["true", "false"]
@@ -73,30 +80,6 @@ Resources:
       LogGroupName: /aws/lambda/overloader-api
       RetentionInDays: 30
 
-  ExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: overloader-api-role
-      Description: The Overloader API function. Writes its own logs and nothing else.
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: overloader-api-logs
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                # The log group's ARN already ends in ":*", which covers its log streams.
-                Resource: !GetAtt LogGroup.Arn
-
   Function:
     Type: AWS::Lambda::Function
     Properties:
@@ -109,7 +92,9 @@ Resources:
       MemorySize: !Ref MemorySize
       # Includes a cold start (pulling the image, starting uvicorn, the readiness check).
       Timeout: 15
-      Role: !GetAtt ExecutionRole.Arn
+      # Created in the registry stack (which only Grant deploys), so deploys from GitHub can't
+      # change what the API is allowed to do.
+      Role: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ExecutionRoleName}
       ReservedConcurrentExecutions: !If [Enabled, !Ref ReservedConcurrency, 0]
       LoggingConfig:
         LogGroup: !Ref LogGroup

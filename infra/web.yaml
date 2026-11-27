@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Overloader frontend: the S3 bucket the built PWA is served from, readable only from Cloudflare
+  (the overloader-edge Worker fetches from it), plus permission for the GitHub deploy role to
+  upload to it. Stack 3; deploy in us-west-2 after registry.yaml. See infra/README.md.
+
+Parameters:
+  DeployRoleName:
+    Type: String
+    Default: overloader-github-deploy
+    Description: The role from the registry stack that GitHub Actions uses.
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Not named after the hostname: the Worker addresses it directly, so the app's domain can
+      # change without a new bucket.
+      BucketName: !Sub overloader-web-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+      # Allow a bucket policy that grants public reads (restricted below to Cloudflare).
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false
+        RestrictPublicBuckets: false
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      # Same Cloudflare ranges as hiregrant.today's bucket (https://www.cloudflare.com/ips/).
+      # If the site ever 403s through Cloudflare, check for new ranges first.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: PublicReadOnlyThroughCloudflare
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub ${Bucket.Arn}/*
+            Condition:
+              IpAddress:
+                aws:SourceIp: &cloudflare
+                  - 173.245.48.0/20
+                  - 103.21.244.0/22
+                  - 103.22.200.0/22
+                  - 103.31.4.0/22
+                  - 141.101.64.0/18
+                  - 108.162.192.0/18
+                  - 190.93.240.0/20
+                  - 188.114.96.0/20
+                  - 197.234.240.0/22
+                  - 198.41.128.0/17
+                  - 162.158.0.0/15
+                  - 104.16.0.0/13
+                  - 104.24.0.0/14
+                  - 172.64.0.0/13
+                  - 131.0.72.0/22
+                  - 2400:cb00::/32
+                  - 2606:4700::/32
+                  - 2803:f800::/32
+                  - 2405:b500::/32
+                  - 2405:8100::/32
+                  - 2a06:98c0::/29
+                  - 2c0f:f248::/32
+
+  DeployPermission:
+    Type: AWS::IAM::RolePolicy
+    Properties:
+      RoleName: !Ref DeployRoleName
+      PolicyName: overloader-web-deploy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: UploadSite
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub ${Bucket.Arn}/*
+          - Sid: ListForSync
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt Bucket.Arn
+
+Outputs:
+  BucketName:
+    Value: !Ref Bucket
+  WebsiteOrigin:
+    Description: Put this in the Worker's SITE_ORIGIN variable.
+    Value: !GetAtt Bucket.WebsiteURL

@@ -26,6 +26,44 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-27: Deploys I don't have to babysit
+
+**Situation:** The first production deploy worked, but it took a lot of back and forth: the deploy
+workflow updated the function directly, so the CloudFormation stack's image tag went stale, and
+any later stack change by hand would have rolled the code back unless I typed in the live image
+ID. I said I didn't want to manage image IDs (or secrets) by hand on every deploy.
+
+**Decision:**
+- **Deploys go through CloudFormation:** the workflow runs `cloudformation deploy` with only the
+  image tag changed. Every other parameter, the secrets included, keeps its value, so the stack is
+  always the truth and template changes ship with the code.
+- **No new power for GitHub.** Its role only starts the stack update; CloudFormation applies it
+  with a narrow service role that can manage just that function, and every IAM role moved into
+  the registry stack, which only I deploy as root. CI can ship code but can't change what the API
+  is allowed to do.
+- **Automatic on push to `main`:** backend changes deploy the API, frontend changes deploy the
+  app, docs don't deploy. Rollback is one run of the workflow with an older image tag. The agent
+  still asks me before it pushes to `main`.
+
+**Why:** A deploy should be one action that can't leave the system half-updated. Making it
+automatic was only acceptable once the automation couldn't widen its own permissions.
+
+---
+
+## 2026-11-27: Test it at the gym before the name is final
+
+**Situation:** I want to use the app at the gym now, but the name will probably change (a
+competitor has it), so buying a domain would be premature.
+
+**Decision:** Host it at `overloader.hiregrant.today`, a subdomain of my portfolio's existing
+Cloudflare zone, with sign-in emails from `send.hiregrant.today` through Resend, instead of a
+throwaway URL or a test-only login. I turned down a production "test login" back door.
+
+**Why:** It's the real production setup (HTTPS so the PWA installs, Cloudflare in front, real
+email sign-in), so moving to the final name later is a DNS and Worker-route change, not a rebuild.
+
+---
+
 ## 2026-11-26: Containers, but at Lambda prices
 
 **Situation:** Time to choose where the FastAPI server runs. Containers appealed to me for the

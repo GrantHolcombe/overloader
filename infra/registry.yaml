@@ -1,7 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Overloader: the API's image registry (ECR) and the role GitHub Actions uses to push images and
-  deploy them. Stack 1 of 2; deploy in us-west-2 before api.yaml. See infra/README.md.
+  Overloader: the API's image registry (ECR), the role GitHub Actions uses to push images and
+  deploy, the role CloudFormation uses for those deploys, and the API's own execution role.
+  Everything IAM lives here, deployed by hand as root; GitHub can't change it. Deploy in
+  us-west-2 before api.yaml. See infra/README.md.
 
 Parameters:
   GitHubSubjectPrefix:
@@ -15,6 +17,10 @@ Parameters:
     Type: String
     Default: overloader-api
     Description: Name of the Lambda function api.yaml creates (the deploy role may update only it).
+  ApiStackName:
+    Type: String
+    Default: overloader-api
+    Description: The CloudFormation stack made from api.yaml (GitHub Actions may update only it).
 
 Resources:
   Repository:
@@ -92,14 +98,123 @@ Resources:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:DescribeImages
                 Resource: !GetAtt Repository.Arn
-              - Sid: DeployThisFunctionOnly
+              - Sid: ReadTheFunction
                 Effect: Allow
                 Action:
-                  - lambda:UpdateFunctionCode
                   - lambda:GetFunction
                   - lambda:GetFunctionConfiguration
                   - lambda:GetFunctionUrlConfig
                 Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}
+              # Deploys go through CloudFormation: the workflow updates the api stack's ImageTag
+              # (every other parameter, secrets included, keeps its value), so the stack always
+              # matches what's running. The changes themselves are made by CfnDeployRole below.
+              - Sid: UpdateTheApiStack
+                Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApiStackName}/*
+              - Sid: HandTheStackToTheServiceRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt CfnDeployRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+  # The role CloudFormation uses to apply api-stack changes started by GitHub Actions. It can
+  # manage the one function, its URL, permissions and log group, and nothing in IAM except
+  # handing the function its (fixed) execution role. What the API itself may do is decided by
+  # ApiExecutionRole here, which only Grant changes (this stack is deployed by hand as root).
+  CfnDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: overloader-cfn-deploy
+      Description: CloudFormation applies overloader-api stack updates started by GitHub Actions.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: overloader-api-stack
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: TheFunctionItsUrlAndPermissions
+                Effect: Allow
+                Action: lambda:*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}
+                  - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${FunctionName}:*
+              - Sid: PullTheImage
+                Effect: Allow
+                Action:
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: !GetAtt Repository.Arn
+              - Sid: ItsLogGroup
+                Effect: Allow
+                Action: logs:*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${FunctionName}*
+              - Sid: FindLogGroups
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: "*"
+              - Sid: GiveTheFunctionItsRole
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt ApiExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: lambda.amazonaws.com
+              # One-time cleanup: the first deploy through CloudFormation removes the execution
+              # role the api stack used to create itself (overloader-api-role). Safe to delete
+              # this statement after that deploy.
+              - Sid: RemoveTheOldExecutionRole
+                Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:ListInstanceProfilesForRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/overloader-api-role
+
+  # What the running API may do: write its own logs, nothing else (it reaches Neon and Resend
+  # over the internet with credentials from its environment, not through IAM).
+  ApiExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: overloader-api-exec
+      Description: The Overloader API function. Writes its own logs and nothing else.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: overloader-api-logs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${FunctionName}:*
 
 Outputs:
   RepositoryUri:
@@ -107,3 +222,7 @@ Outputs:
   DeployRoleArn:
     Description: Put this in the GitHub repository variable AWS_DEPLOY_ROLE_ARN.
     Value: !GetAtt DeployRole.Arn
+  CfnDeployRoleArn:
+    Value: !GetAtt CfnDeployRole.Arn
+  ApiExecutionRoleArn:
+    Value: !GetAtt ApiExecutionRole.Arn
