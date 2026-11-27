@@ -50,6 +50,11 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
     (`ExerciseFormDialog.vue`, which creates/edits custom exercises).
   - `EditEntryDialog.vue` for editing a log entry. Steppers stack one per row inside a modal,
     since two side by side leave the number box too narrow at phone width.
+- **Training summary** (`views/SummaryView.vue`): a 2×2 grid of stat cards (label, big number,
+  a "vs last week" line, green when up), then one row per muscle group with a thick accent bar
+  for the week shown over a thin `--border` bar for the week before, on one shared scale. The six
+  main groups always show ("Not trained" in muted text), so a skipped group stands out. The
+  numbers are always written out; the bars are decoration (`aria-hidden`).
 - **Dates:** `components/DateField.vue`, a native date input that never allows a day after
   today. `max` greys out future days on Chrome/Android; iOS Safari's picker ignores `max`, so a
   future pick snaps back to today with a short note. It also undoes iOS's wide intrinsic width

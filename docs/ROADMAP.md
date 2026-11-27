@@ -33,7 +33,10 @@ billing in Phase 2:
    when signal returns, with the time it was lifted. Each entry carries a `client_id`, so a retry
    after a lost reply can't log it twice (migration `0005`). The service worker also keeps the
    last copy of what you've viewed, so the app opens in a dead zone.
-3. Weekly volume by muscle group and training summary (Pro)
+3. [x] Weekly training summary (Pro, 2026-11-27): "This week" on the home screen opens
+   `/summary`, with days trained, sets, volume and exercises, plus sets and volume per muscle
+   group, each against the week before. Weeks run Monday to Sunday; ‹ › steps back through past
+   weeks. The math is in `lib/summary.ts` for the heat map to reuse.
 4. Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro;
    reuses the per-muscle totals from 3)
 5. Routines: saved workouts you log in order (Pro)
