@@ -88,39 +88,25 @@ builds and pushes the image, then migrates the production database: it creates t
 `overloader_app` role (with no password yet) and the exercise catalog. There's no function yet, so
 it ends with "create the api stack with ImageTag=…". Note that commit SHA.
 
-### 5. 🧑 Neon: the API's least-privilege login
+### 5. 🧑 Neon: the API's least-privilege login (and the JWT secret)
 
 `overloader_app` can read and write rows in the app's tables and nothing else (no schema changes,
-no roles, no `alembic_version`). Migration `0004_app_role.py` created it without a password; give it
-one now.
+no roles, no `alembic_version`). Migration `0004_app_role.py` created it without a password.
 
-1. Make a password (in your terminal, not chat):
-
-   ```powershell
-   python -c "import secrets; print(secrets.token_urlsafe(32))"
-   ```
-
-2. Connect as the owner with the **direct** string and set it. `\password` asks twice and shows
-   nothing:
-
-   ```powershell
-   psql "<direct owner string from step 1>"
-   ```
-   ```
-   \password overloader_app
-   \q
-   ```
-
-3. Build the API's connection string from the **pooled** owner string: replace
-   `neondb_owner:<owner password>` with `overloader_app:<new password>`. Everything after the `@`
-   (the `-pooler` host, `/overloader?sslmode=require…`) stays the same. Save it in your password
-   manager.
-
-Also make a **new JWT secret** for production (not the dev one):
+psql's `\password` doesn't work on Neon (it sends the password pre-encrypted; Neon only accepts
+plain text), and `ALTER ROLE ... PASSWORD '...'` at the psql prompt would land in psql's history.
+So a script does it, with nothing secret on screen:
 
 ```powershell
-python -c "import secrets; print(secrets.token_urlsafe(48))"
+cd backend
+.venv\Scripts\python scripts\set_app_password.py
 ```
+
+It asks (hidden) for prod's **direct** owner string, sets a random password on `overloader_app`,
+builds and tests the API's **pooled** string (it can read rows, it can't create tables), and puts
+it on the clipboard for the stack's **DatabaseUrl**; press Enter and a new **JwtSecret** replaces
+it; Enter again clears the clipboard. Have step 6's parameter page open before running it. If the
+values are lost, run it again and update the stack.
 
 ### 6. 🧑 AWS: the API stack
 
@@ -130,8 +116,8 @@ name `overloader-api`. Parameters:
 | Parameter | Value |
 | --- | --- |
 | ImageTag | the commit SHA from step 4 |
-| DatabaseUrl | the `overloader_app` pooled string from step 5 |
-| JwtSecret | the new production secret from step 5 |
+| DatabaseUrl | pasted from the script in step 5 |
+| JwtSecret | pasted from the script in step 5 |
 | ResendApiKey, OriginSecret, CorsOrigins | leave empty for now |
 | everything else | defaults |
 
