@@ -46,6 +46,7 @@ USER overloader
 # ENV=production: the app refuses to start without a real JWT_SECRET (see app/main.py) and
 # never prints sign-in codes. Local runs can pass -e ENV=dev.
 ENV PATH=/venv/bin:$PATH \
+    PYTHONPATH=/srv \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ENV=production \
