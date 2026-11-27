@@ -1,0 +1,86 @@
+name: deploy-api
+
+# Builds the API image, pushes it to ECR, migrates the production database, and points the Lambda
+# function at the new image. Manual for now ("Run workflow" on main); deploying on every push to
+# main can be switched on once the first deploys have gone well. See infra/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      migrate:
+        description: Run database migrations and the catalog sync before switching the function
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # sign in to AWS as overloader-github-deploy (no stored AWS keys)
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  FUNCTION: overloader-api
+  REPOSITORY: overloader-api
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    # No GitHub "environment" here on purpose: it would change the identity GitHub presents to
+    # AWS (sub = ...:environment:production), and the deploy role trusts ...:ref:refs/heads/main.
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2.1.7
+
+      - name: Build and push the image
+        id: image
+        run: |
+          uri="${{ steps.ecr.outputs.registry }}/$REPOSITORY:$GITHUB_SHA"
+          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
+            echo "Image for $GITHUB_SHA already pushed; reusing it."
+          else
+            # --provenance=false: Lambda needs a plain image manifest, not an attestation index.
+            docker buildx build --platform linux/arm64 --provenance=false -t "$uri" --push backend
+          fi
+          echo "uri=$uri" >> "$GITHUB_OUTPUT"
+          echo "Image tag (use as ImageTag in the api stack): \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Migrate and sync the catalog
+        if: inputs.migrate
+        env:
+          # The owner's DIRECT (non-pooler) connection string; migrations need it, the API doesn't.
+          MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
+        run: |
+          test -n "$MIGRATE_DATABASE_URL" || { echo "Set the MIGRATE_DATABASE_URL secret"; exit 1; }
+          run() { docker run --rm -e DATABASE_URL="$MIGRATE_DATABASE_URL" "${{ steps.image.outputs.uri }}" "$@"; }
+          run alembic upgrade head
+          run python -m app.catalog --apply
+
+      - name: Point the function at the new image
+        id: deploy
+        run: |
+          if ! aws lambda get-function --function-name "$FUNCTION" >/dev/null 2>&1; then
+            echo "No $FUNCTION function yet: create the api stack with ImageTag=$GITHUB_SHA." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          aws lambda update-function-code --function-name "$FUNCTION" --image-uri "${{ steps.image.outputs.uri }}" --query LastUpdateStatus
+          aws lambda wait function-updated-v2 --function-name "$FUNCTION"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        if: steps.deploy.outputs.deployed == 'true'
+        run: |
+          url=$(aws lambda get-function-url-config --function-name "$FUNCTION" --query FunctionUrl --output text)
+          for i in 1 2 3; do curl -fsS "${url}api/health" && break; sleep 5; done
+          curl -fsS "${url}api/health" | grep '"ok":true'
+          echo "Deployed \`$GITHUB_SHA\` to $url" >> "$GITHUB_STEP_SUMMARY"

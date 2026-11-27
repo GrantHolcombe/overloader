@@ -35,11 +35,14 @@ The live task list is the private GitHub Project board. This page is the overvie
       ~$35 with a load balancer), App Runner (closed to new customers since April 30, 2026),
       Fly.io (~$2-4/month).
 - [x] Dockerfile for the API (Lambda Web Adapter, runs the same locally and on Lambda; 2026-11-27)
-- AWS stack as code: ECR repo, Lambda (image, ARM64), Function URL, logs-only role, SSM
-  parameters for secrets, reserved-concurrency cap, log retention
-- GitHub Actions deploy: OIDC role, build and push the image, update the function, run
-  migrations and the catalog sync
-- Neon production database and a least-privilege app role (migrations run as the owner)
+- AWS stack as code (`infra/`, 2026-11-27): `registry.yaml` (ECR + GitHub deploy role) and
+  `api.yaml` (Lambda image, ARM64, Function URL, logs-only role, reserved concurrency + kill
+  switch, 30-day logs). Secrets are NoEcho stack parameters typed in the console. Waiting on Grant
+  to create the stacks (`infra/README.md`).
+- GitHub Actions deploy (`deploy-api.yml`, manual trigger for now): OIDC role, build and push
+  the image, migrate + catalog sync, update the function, smoke test
+- Neon production database and a least-privilege app role (migration `0004`: `overloader_app`;
+  migrations run as the owner)
 - Frontend on S3 behind Cloudflare, deployed by GitHub Actions (like hiregrant.today)
 - Resend sending domain, SPF/DKIM
 - Domain and final app name

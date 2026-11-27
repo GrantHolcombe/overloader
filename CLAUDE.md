@@ -15,6 +15,10 @@
   `ENV=production` by default). Docker isn't installed on Grant's PC; the `image` job in
   `checks.yml` builds it on `ubuntu-24.04-arm` and smoke-tests migrate / catalog sync / serve.
   Keep the app free of Lambda-specific code.
+- Production lives in `infra/` (two CloudFormation stacks Grant deploys as root in us-west-2;
+  step-by-step in `infra/README.md`) and `.github/workflows/deploy-api.yml` (manual trigger).
+  The API connects to Neon as `overloader_app` (migration 0004), never the owner. Behind
+  Cloudflare set `ORIGIN_SECRET` and `CLIENT_IP_HEADER`. Ask Grant before running a deploy.
 - Before pushing: `ruff check . && ruff format --check . && pytest` in `backend/` (pytest needs
   `TEST_DATABASE_URL`, a database it may wipe) and `npm test && npm run build` in `frontend/`.
   CI (`.github/workflows/checks.yml`) runs the same.

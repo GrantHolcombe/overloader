@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -29,6 +29,17 @@ LIMIT_IP_HOUR = 10
 
 def normalize(email: str) -> str:
     return email.strip().lower()
+
+
+def client_ip(request: Request) -> str | None:
+    """The user's address for rate limiting: the configured header (Cloudflare's
+    cf-connecting-ip in production) when present, otherwise the connection's address."""
+    header = get_settings().client_ip_header
+    if header:
+        value = request.headers.get(header, "").strip()
+        if value:
+            return value[:45]  # longest IPv6 text form; the column is 45 characters
+    return request.client.host if request.client else None
 
 
 def _hash(email: str, code: str) -> str:
