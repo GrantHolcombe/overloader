@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import DateField from "../components/DateField.vue";
 import EditEntryDialog, { type EntryPatch } from "../components/EditEntryDialog.vue";
@@ -7,7 +7,8 @@ import ExerciseFormDialog from "../components/ExerciseFormDialog.vue";
 import SetsEditor from "../components/SetsEditor.vue";
 import Stepper from "../components/Stepper.vue";
 import { useRouter } from "vue-router";
-import { api, type Exercise, type ExerciseFields } from "../lib/api";
+import { api, ApiError, type Exercise, type ExerciseFields } from "../lib/api";
+import { enqueue, isRetryable, newClientId, outbox, pendingEntries, remove } from "../lib/outbox";
 import {
   atDay,
   compareToLast,
@@ -85,12 +86,18 @@ function sortLogs(list: LogEntry[]) {
   );
 }
 
-const last = computed(() => logs.value[0]);
+// Entries saved on this phone but not yet synced (offline queue) count everywhere: last time,
+// records, history. They have negative ids until the server gives them real ones.
+const pending = computed(() => pendingEntries(session.user?.id, props.id));
+const entries = computed(() => sortLogs([...pending.value, ...logs.value]));
+const isPending = (entry: LogEntry) => entry.id < 0;
+
+const last = computed(() => entries.value[0]);
 
 // Group the history by day, newest first.
 const history = computed(() => {
   const groups: { day: string; label: string; entries: LogEntry[] }[] = [];
-  for (const entry of logs.value) {
+  for (const entry of entries.value) {
     const day = dayKey(entry.performed_at);
     let group = groups.at(-1);
     if (!group || group.day !== day) {
@@ -104,7 +111,7 @@ const history = computed(() => {
 
 // Which entries set a record when they were logged (worked out from the history, so edits and
 // backdated entries are always reflected).
-const records = computed(() => personalRecords(logs.value));
+const records = computed(() => personalRecords(entries.value));
 const recordText = (kinds: PRKind[]) => kinds.map((k) => PR_LABELS[k]).join(", ");
 
 // The lift on the form, compared with the entries before the day it's being logged for.
@@ -116,12 +123,12 @@ const lift = computed(() => ({
   ...(mode.value === "sets" ? { set_details: setRows.value } : {}),
 }));
 const priorEntries = computed(() => {
-  if (isToday.value) return logs.value;
+  if (isToday.value) return entries.value;
   const moment = atDay(logDay.value);
-  return logs.value.filter((e) => e.performed_at < moment);
+  return entries.value.filter((e) => e.performed_at < moment);
 });
 const previous = computed(() =>
-  isToday.value ? logs.value[0] : entryBefore(logs.value, atDay(logDay.value)),
+  isToday.value ? entries.value[0] : entryBefore(entries.value, atDay(logDay.value)),
 );
 const comparison = computed(() =>
   previous.value ? compareToLast(lift.value, previous.value) : null,
@@ -155,18 +162,44 @@ onMounted(async () => {
   }
 });
 
+// A queued entry just synced: reload the history so it shows with its real id.
+watch(
+  () => outbox.version,
+  async () => {
+    try {
+      logs.value = await api.logs(props.id);
+    } catch {
+      // Still flaky; the queued copy stays visible until the next sync.
+    }
+  },
+);
+
 async function save() {
   error.value = "";
   saving.value = true;
   try {
-    const body =
-      mode.value === "sets"
-        ? { set_details: setRows.value }
-        : { weight: weight.value, reps: reps.value, sets: sets.value };
-    const entry = await api.addLog(props.id, {
-      ...body,
-      ...(isToday.value ? {} : { performed_at: atDay(logDay.value) }),
-    });
+    const body = {
+      ...(mode.value === "sets"
+        ? { set_details: setRows.value.map((x) => ({ ...x })) }
+        : { weight: weight.value, reps: reps.value, sets: sets.value }),
+      // When it was lifted, not when it reaches the server (it may wait in the queue).
+      performed_at: isToday.value ? new Date().toISOString() : atDay(logDay.value),
+      client_id: newClientId(),
+    };
+    let entry: LogEntry;
+    try {
+      // No signal at all: don't wait for a request that can't go anywhere.
+      if (!navigator.onLine) throw new ApiError(0, "Offline");
+      entry = await api.addLog(props.id, body);
+    } catch (e) {
+      if (!(e instanceof ApiError) || !isRetryable(e.status) || !session.user) throw e;
+      // Keep it on the phone and send it when there's signal (see outbox.ts).
+      enqueue({ client_id: body.client_id, user_id: session.user.id, exercise_id: props.id, unit: unit.value, body });
+      const queued = pending.value.find((p) => p.client_id === body.client_id);
+      const set = queued && records.value.get(queued.id);
+      showToast(set ? `New PR! ${recordText(set)} · saved on this phone` : "Saved on this phone · syncs when you have signal", set ? "pr" : "ok");
+      return;
+    }
     logs.value = sortLogs([entry, ...logs.value]);
     const set = records.value.get(entry.id);
     if (set) showToast(`New PR! ${recordText(set)}`, "pr");
@@ -184,6 +217,13 @@ const deleting = ref(false);
 async function confirmDelete() {
   const entry = pendingDelete.value;
   if (!entry) return;
+  if (isPending(entry)) {
+    // Not on the server yet: just take it off the queue.
+    remove((entry as LogEntry & { client_id: string }).client_id);
+    pendingDelete.value = null;
+    showToast("Deleted");
+    return;
+  }
   error.value = "";
   deleting.value = true;
   try {
@@ -362,13 +402,17 @@ const time = (iso: string) =>
             <button
               type="button"
               class="grow edit"
-              :aria-label="`Edit ${formatEntry(entry)}`"
+              :aria-label="isPending(entry) ? `${formatEntry(entry)}, waiting to sync` : `Edit ${formatEntry(entry)}`"
+              :disabled="isPending(entry)"
               @click="editing = entry"
             >
               <span>
                 <span v-if="records.get(entry.id)" class="tag">PR</span>{{ formatEntry(entry) }}
               </span>
-              <small v-if="records.get(entry.id)">
+              <small v-if="isPending(entry)" class="waiting">
+                {{ time(entry.performed_at) }} · saved on this phone, waiting to sync
+              </small>
+              <small v-else-if="records.get(entry.id)">
                 {{ time(entry.performed_at) }} · {{ recordText(records.get(entry.id)!) }}
               </small>
               <small v-else>{{ time(entry.performed_at) }} · tap to edit</small>
@@ -501,6 +545,12 @@ const time = (iso: string) =>
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+.edit:disabled {
+  cursor: default;
+}
+.waiting {
+  color: var(--accent);
 }
 .edit:focus-visible {
   outline: 3px solid var(--accent);

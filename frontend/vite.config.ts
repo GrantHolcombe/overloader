@@ -37,6 +37,21 @@ export default defineConfig({
             handler: "StaleWhileRevalidate",
             options: { cacheName: "catalog" },
           },
+          {
+            // Everything else the app reads (recent, an exercise and its history, a day): fresh
+            // when there's signal, the last copy when there isn't. Cleared on sign-in/out
+            // (session.ts), since responses are per user. Sign-in itself is never cached.
+            urlPattern: ({ url, request }) =>
+              request.method === "GET" &&
+              url.pathname.startsWith("/api/") &&
+              !url.pathname.startsWith("/api/auth/"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
         ],
       },
     }),

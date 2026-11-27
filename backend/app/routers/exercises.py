@@ -1,9 +1,11 @@
 from datetime import timedelta
+from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import AwareDatetime
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import distinct_on
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import DB, CurrentUser
 from app.config import get_settings
@@ -169,10 +171,22 @@ def _set_details(db: DB, entry: LogEntry, sets: list[SetIn]) -> None:
 
 
 @router.post("/exercises/{exercise_id}/logs", status_code=status.HTTP_201_CREATED)
-def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB) -> LogOut:
-    """Logs either a quick entry (weight x reps x sets) or a per-set one (set_details)."""
+def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB, response: Response) -> LogOut:
+    """Logs either a quick entry (weight x reps x sets) or a per-set one (set_details).
+
+    With a client_id already used by this user, nothing is added: the saved entry comes back
+    with 200, so the app's offline queue can retry a request whose reply it never got.
+    """
+    if body.client_id is not None and (saved := _by_client_id(db, user, body.client_id)):
+        response.status_code = status.HTTP_200_OK
+        return LogOut.model_validate(saved)
     _exercise_or_404(db, user, exercise_id)
-    entry = LogEntry(user_id=user.id, exercise_id=exercise_id, unit=body.unit or user.unit)
+    entry = LogEntry(
+        user_id=user.id,
+        exercise_id=exercise_id,
+        unit=body.unit or user.unit,
+        client_id=body.client_id,
+    )
     if body.set_details is not None:
         _set_details(db, entry, body.set_details)
     else:
@@ -180,9 +194,24 @@ def add_log(exercise_id: int, body: LogIn, user: CurrentUser, db: DB) -> LogOut:
     if body.performed_at is not None:
         entry.performed_at = body.performed_at
     db.add(entry)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The same retry arrived twice at once and the other one saved first.
+        db.rollback()
+        saved = _by_client_id(db, user, body.client_id) if body.client_id else None
+        if saved is None:
+            raise
+        response.status_code = status.HTTP_200_OK
+        return LogOut.model_validate(saved)
     db.refresh(entry)
     return LogOut.model_validate(entry)
+
+
+def _by_client_id(db: DB, user: User, client_id: UUID) -> LogEntry | None:
+    return db.scalar(
+        select(LogEntry).where(LogEntry.user_id == user.id, LogEntry.client_id == client_id)
+    )
 
 
 MAX_RANGE = timedelta(days=62)

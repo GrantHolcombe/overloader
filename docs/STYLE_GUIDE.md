@@ -8,6 +8,15 @@ Built for one hand, between sets, in a dim gym. Tokens live in `frontend/src/sty
 - **Numbers first.** Weight, reps and sets are the biggest text on the logging screen.
 - **One primary action per screen** (orange `btn-primary`): "Email me a code", "Sign in", "Log it".
 - **Mobile-first**, single column, max width 560px, 16px gutters, safe-area insets respected.
+- **No zoom, vertical scrolling only** (Grant's call, 2026-11-27): fast + / − taps were zooming
+  iPhones. The page is `touch-action: pan-y` with `overflow-x: clip`, controls are
+  `touch-action: manipulation`, and the viewport meta sets `maximum-scale=1, user-scalable=no`.
+  Sideways scrollers like `.chips` still work. Keep form fields at 16px or larger, or iOS zooms
+  in on focus.
+- **Offline is normal.** A log that can't reach the server is saved on the phone
+  (`lib/outbox.ts`), shown in History as "saved on this phone, waiting to sync" (accent text,
+  not editable, × removes it), and a banner above every screen counts what's waiting. Say
+  "saved on this phone", not "error".
 
 ## Tokens
 

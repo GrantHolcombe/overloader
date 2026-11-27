@@ -13,18 +13,33 @@ The live task list is the private GitHub Project board. This page is the overvie
 
 ## Phase 1: Make it a habit
 
+Done:
+
 - [x] Custom exercises, personal to each user (2026-11-26). The standard list is now edited in
       `backend/catalog/exercises.csv` and synced with one command; removed exercises are retired,
       never deleted.
-- Merge two catalog exercises (move everyone's logs, retire the duplicate)
-- "Suggest for everyone": promote a popular custom exercise into the catalog
 - [x] View logs from a specific day in the Recent area (free, 2026-11-26)
-- Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro)
 - [x] Per-set logging (different weight or reps per set) alongside the quick weight × reps × sets
       (2026-11-26)
 - [x] Personal-record badges and "beat last time" nudges (2026-11-26)
 - [x] Edit an entry; log a past date (2026-11-26)
-- Offline logging queue (save at the rack, sync when signal returns)
+
+Remaining, in Grant's order (2026-11-27). Pro features are built ungated and switched on with
+billing in Phase 2:
+
+1. [x] iPhone fix: rapid + / − taps zoomed the page; now vertical scrolling only, no zoom
+   (2026-11-27)
+2. [x] Offline logging queue (2026-11-27): a log with no signal is saved on the phone and sent
+   when signal returns, with the time it was lifted. Each entry carries a `client_id`, so a retry
+   after a lost reply can't log it twice (migration `0005`). The service worker also keeps the
+   last copy of what you've viewed, so the app opens in a dead zone.
+3. Weekly volume by muscle group and training summary (Pro)
+4. Muscle-group heat map on a body outline, shaded by how recently each group was trained (Pro;
+   reuses the per-muscle totals from 3)
+5. Routines: saved workouts you log in order (Pro)
+6. Plate calculator and warm-up set suggestions (Pro)
+7. On hold until there are other users: merge two catalog exercises (move everyone's logs,
+   retire the duplicate); "suggest for everyone" (promote a popular custom exercise)
 
 ## Phase 2: Ship it
 
@@ -35,18 +50,21 @@ The live task list is the private GitHub Project board. This page is the overvie
       ~$35 with a load balancer), App Runner (closed to new customers since April 30, 2026),
       Fly.io (~$2-4/month).
 - [x] Dockerfile for the API (Lambda Web Adapter, runs the same locally and on Lambda; 2026-11-27)
-- AWS stack as code (`infra/`, 2026-11-27): `registry.yaml` (ECR + GitHub deploy role) and
-  `api.yaml` (Lambda image, ARM64, Function URL, logs-only role, reserved concurrency + kill
-  switch, 30-day logs). Secrets are NoEcho stack parameters typed in the console. Waiting on Grant
-  to create the stacks (`infra/README.md`).
-- GitHub Actions deploy (`deploy-api.yml`, manual trigger for now): OIDC role, build and push
-  the image, migrate + catalog sync, update the function, smoke test
-- Neon production database and a least-privilege app role (migration `0004`: `overloader_app`;
-  migrations run as the owner)
-- Frontend on S3 behind Cloudflare, deployed by GitHub Actions: `infra/web.yaml`, the
-  `overloader-edge` Worker and `deploy-web.yml`, at overloader.hiregrant.today until the final domain
-- Resend sending domain, SPF/DKIM
-- Domain and final app name
+- [x] AWS stack as code (`infra/`, 2026-11-27): `registry.yaml` (ECR, every IAM role),
+      `api.yaml` (Lambda image, ARM64, Function URL, reserved concurrency + kill switch, 30-day
+      logs) and `web.yaml` (S3 bucket readable only from Cloudflare). Secrets are NoEcho stack
+      parameters typed in the console.
+- [x] GitHub Actions deploys on push to `main` (2026-11-27): `deploy-api.yml` builds and pushes
+      the image, migrates + syncs the catalog, then `cloudformation deploy` with only the image
+      tag changed; `deploy-web.yml` syncs the build to S3. Both smoke-test the live app.
+- [x] Neon production database and a least-privilege app role (migration `0004`:
+      `overloader_app`; migrations run as the owner)
+- [x] Frontend on S3 behind Cloudflare (2026-11-27): the `overloader-edge` Worker serves the app
+      and proxies `/api` to the Function URL at overloader.hiregrant.today until the final domain
+- [x] Resend sending domain `send.hiregrant.today`, SPF/DKIM (2026-11-27)
+- Domain and final app name (a competitor uses "Overloader"); AWS resources get rebuilt under the
+  new name
+- Passkey sign-in (after the final domain: passkeys are bound to it)
 - Account deletion and data export
 - Legal pages: Terms, Privacy, Refunds and cancellation (see below)
 

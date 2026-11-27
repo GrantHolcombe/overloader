@@ -29,7 +29,16 @@ function save() {
   }
 }
 
+// The service worker caches API reads (so the app opens with no signal). Those responses belong
+// to whoever was signed in, so they're dropped whenever that changes.
+const USER_CACHES = ["api", "catalog"];
+function clearUserCaches() {
+  if (!("caches" in globalThis)) return;
+  for (const name of USER_CACHES) caches.delete(name).catch(() => {});
+}
+
 export function signIn(token: string, user: User) {
+  if (session.user?.id !== user.id) clearUserCaches();
   session.token = token;
   session.user = user;
   save();
@@ -41,6 +50,7 @@ export function setUser(user: User) {
 }
 
 export function signOut() {
+  clearUserCaches();
   session.token = null;
   session.user = null;
   save();

@@ -26,6 +26,25 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-27: Finishing Phase 1 in the order I'll feel it at the gym
+
+**Situation:** With the app live on my phone, the agent proposed an order for the rest of
+Phase 1: the iPhone zoom bug, the offline queue, then routines and the plate calculator before
+the muscle-group volume and heat map.
+
+**Decision:**
+- **Fix what bites at the gym first:** rapid + / − taps were zooming the page, and gyms have dead
+  spots, so the zoom fix and the offline logging queue go first, together.
+- **Analysis before convenience:** I moved muscle-group volume and the heat map ahead of routines
+  and the plate calculator. The heat map reuses the volume work, so they ship back to back.
+- **Merge and suggest wait** until there are other users to need them.
+
+**Why:** Volume and the heat map make the Pro plan's "insight" side real, and they come straight
+from data I'm already logging. Routines are worth designing after a few weeks of real sessions
+show how I actually train.
+
+---
+
 ## 2026-11-27: Deploys I don't have to babysit
 
 **Situation:** The first production deploy worked, but it took a lot of back and forth: the deploy

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import (
     AfterValidator,
@@ -120,6 +121,9 @@ class LogIn(BaseModel):
     unit: Unit | None = None
     # Defaults to now. Set it to log a past workout.
     performed_at: PerformedAt | None = None
+    # Optional, picked by the app. Sending the same one again returns the saved entry (200)
+    # instead of logging a duplicate, so the offline queue can retry safely.
+    client_id: UUID | None = None
 
     @model_validator(mode="after")
     def _quick_or_per_set(self):

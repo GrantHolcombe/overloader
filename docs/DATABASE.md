@@ -44,6 +44,7 @@ erDiagram
         int reps "1-1000"
         int sets "1-100"
         timestamptz performed_at
+        uuid client_id "app-picked; unique per user when set"
     }
     log_set {
         int id PK
@@ -74,7 +75,9 @@ erDiagram
 - **log_entry**: one row per logged exercise, as weight × reps × sets. The weight keeps the unit
   it was entered in, so switching the display unit never rewrites history; the app converts for
   charts. Index `(user_id, exercise_id, performed_at)` serves the history, chart and "last time"
-  queries.
+  queries. `client_id` (migration `0005`) is a UUID the app picks for each new entry; a partial
+  unique index on `(user_id, client_id)` means a retried request from the offline queue returns
+  the entry already saved instead of logging it twice. Older entries have none.
 - **Roles** (migration `0004`): the API connects as `overloader_app`, which can select, insert,
   update and delete rows in the app's tables and use their sequences, and nothing else (no schema
   changes, no `alembic_version`). Later tables get the same grants through default privileges.

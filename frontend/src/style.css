@@ -49,6 +49,23 @@ body {
   font-size: 17px;
   line-height: 1.4;
   -webkit-tap-highlight-color: transparent;
+  /* No zoom (Grant's call, 2026-11-27): rapid taps on + / − were read as a double-tap zoom on
+     iPhone. pan-y keeps the page to vertical scrolling; inner scrollers like .chips still
+     scroll sideways because touch-action is only checked up to the element that scrolls. */
+  touch-action: pan-y;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Belt and braces for fast taps: never wait for or act on a double tap. */
+button,
+a,
+input,
+select,
+label,
+.chip {
+  touch-action: manipulation;
 }
 
 #app {
