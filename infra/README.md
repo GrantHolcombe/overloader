@@ -26,6 +26,12 @@ few cents. The account's $5/month budget doesn't need changing.
 
 Do these in order. Steps marked 🧑 are Grant's; the rest Claude can do or check.
 
+> **Check the region selector (top right) says US West (Oregon) before creating either stack.**
+> The console tends to open in N. California (us-west-1), where the rest of the account lives; a
+> stack created there points its permissions at the wrong region and has to be deleted first
+> (IAM role names are global). And choose **Create stack → With new resources (standard)**, not
+> *With existing resources (import)*, which asks for a DeletionPolicy and hides the IAM checkbox.
+
 ### 1. 🧑 Neon: production connection strings
 
 In the Neon console, project **overloader**, open the **production** branch (separate from dev
