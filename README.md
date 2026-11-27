@@ -19,7 +19,8 @@ taps, see what you did last time, and chart every entry to keep progressive over
 | API | Python 3.14, FastAPI, SQLAlchemy 2, Alembic, PyJWT |
 | Database | Postgres on [Neon](https://neon.tech) |
 | Email | [Resend](https://resend.com) (in dev, codes print in the API console) |
-| CI | GitHub Actions: ruff + pytest against Postgres 18, vitest + type-check + build |
+| Hosting (planned) | API as an ARM64 container image on AWS Lambda (Function URL), frontend on S3, Cloudflare in front |
+| CI | GitHub Actions: ruff + pytest against Postgres 18, container build + smoke test on ARM64, vitest + type-check + build |
 
 ```
 frontend/   Vue PWA            backend/   FastAPI app, Alembic migrations, pytest
@@ -51,6 +52,17 @@ cd frontend
 npm install
 npm run dev
 ```
+
+**Container image** (what production runs: AWS Lambda through the Lambda Web Adapter):
+
+```powershell
+docker build -t overloader-api backend
+docker run -p 8080:8080 -e ENV=dev -e DATABASE_URL=... -e JWT_SECRET=... overloader-api
+```
+
+The same image runs migrations and the catalog sync (`alembic upgrade head`,
+`python -m app.catalog --apply`). CI builds it for ARM64 on every pull request and smoke-tests it
+against Postgres.
 
 **On a phone:** `npm run dev:phone` serves the app on your LAN (the Network URL it prints).
 Plain HTTP off localhost means no service worker or install prompt; the rest works.

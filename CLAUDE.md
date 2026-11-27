@@ -11,6 +11,10 @@
 - The standard exercise list is `backend/catalog/exercises.csv`, not a migration. After
   `alembic upgrade head`, run `python -m app.catalog` (dry run) then `--apply`. Never delete a
   catalog row from the database; the sync retires it.
+- `backend/Dockerfile` is the production image (Lambda Web Adapter 1.1.0, ARM64, non-root,
+  `ENV=production` by default). Docker isn't installed on Grant's PC; the `image` job in
+  `checks.yml` builds it on `ubuntu-24.04-arm` and smoke-tests migrate / catalog sync / serve.
+  Keep the app free of Lambda-specific code.
 - Before pushing: `ruff check . && ruff format --check . && pytest` in `backend/` (pytest needs
   `TEST_DATABASE_URL`, a database it may wipe) and `npm test && npm run build` in `frontend/`.
   CI (`.github/workflows/checks.yml`) runs the same.

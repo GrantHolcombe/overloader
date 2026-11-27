@@ -34,7 +34,7 @@ The live task list is the private GitHub Project board. This page is the overvie
       Fargate or Fly.io later without code changes. Priced and set aside: Fargate (~$11/month, or
       ~$35 with a load balancer), App Runner (closed to new customers since April 30, 2026),
       Fly.io (~$2-4/month).
-- Dockerfile for the API (Lambda Web Adapter, runs the same locally and on Lambda)
+- [x] Dockerfile for the API (Lambda Web Adapter, runs the same locally and on Lambda; 2026-11-27)
 - AWS stack as code: ECR repo, Lambda (image, ARM64), Function URL, logs-only role, SSM
   parameters for secrets, reserved-concurrency cap, log retention
 - GitHub Actions deploy: OIDC role, build and push the image, update the function, run
