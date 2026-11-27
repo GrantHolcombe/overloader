@@ -1,18 +1,27 @@
 # Production setup (AWS + Neon)
 
 The API runs on **AWS Lambda as a container image** (`backend/Dockerfile`, Lambda Web Adapter,
-ARM64) behind a **Lambda Function URL**, in **us-west-2** next to the Neon database. Two
-CloudFormation stacks, deployed by Grant from the console as root (like `hiregrant-contact`),
-because they create IAM roles:
+ARM64) behind a **Lambda Function URL**, in **us-west-2** next to the Neon database. The app is
+served by a Cloudflare Worker from an S3 bucket. Three CloudFormation stacks:
 
-| Stack | Template | Creates |
-| --- | --- | --- |
-| `overloader-registry` | `registry.yaml` | ECR repo `overloader-api` (immutable tags, scan on push, keeps 10 images) and IAM role `overloader-github-deploy` (GitHub Actions on `main` only: push images, update this one function) |
-| `overloader-api` | `api.yaml` | Lambda `overloader-api` (ARM64, 512 MB, reserved concurrency 5, kill switch), IAM role `overloader-api-role` (writes its own logs, nothing else), log group (30 days), public Function URL |
+| Stack | Template | Creates | Deployed by |
+| --- | --- | --- | --- |
+| `overloader-registry` | `registry.yaml` | ECR repo `overloader-api` (immutable tags, scan on push, keeps 10 images) and **every IAM role**: `overloader-github-deploy` (GitHub Actions on `main`), `overloader-cfn-deploy` (what CloudFormation uses for those deploys), `overloader-api-exec` (the running API: its own logs, nothing else) | Grant, as root |
+| `overloader-api` | `api.yaml` | Lambda `overloader-api` (ARM64, 512 MB, reserved concurrency 5, kill switch), log group (30 days), public Function URL | Grant once (secrets), then **GitHub Actions on every deploy** |
+| `overloader-web` | `web.yaml` | S3 bucket for the PWA (readable only from Cloudflare) + upload rights for the deploy role | Grant, as root |
 
-Deploys run from GitHub Actions (`.github/workflows/deploy-api.yml`, manual "Run workflow" for
-now): build and push the image, migrate the database and sync the catalog, point the function at
-the new image, smoke-test `/api/health`.
+**Deploys are automatic.** A push to `main` that touches `backend/` runs
+`.github/workflows/deploy-api.yml`: build and push the image, migrate and sync the catalog, then
+`aws cloudformation deploy` with `ImageTag=<commit>`. Every other parameter, secrets included,
+keeps its value, so nothing is typed by hand and the stack always matches what's running. A push
+that touches `frontend/` runs `deploy-web.yml`. Docs-only pushes deploy nothing; both workflows
+can also be started by hand (Actions → Run workflow). Claude asks Grant before pushing to `main`.
+
+Why the split: GitHub's role can push images and start api-stack updates but has no IAM or
+Lambda write access itself. CloudFormation applies the update as `overloader-cfn-deploy`, which
+can manage only that function, its URL and log group, and can only hand the function the fixed
+`overloader-api-exec` role. What the API may do is set in the registry stack, which only Grant
+deploys.
 
 **Secrets never go in git or chat.** Grant types them into the Neon console, `psql`, GitHub's
 secret prompt and the CloudFormation console.
@@ -144,12 +153,21 @@ phone --HTTPS--> Cloudflare (overloader.hiregrant.today)
                      else    -> S3 bucket overloader-web-<account> (website endpoint, Cloudflare IPs only)
 ```
 
-### 8. 🧑 AWS: the web stack
+### 8. 🧑 AWS: registry update and the web stack (before merging the PR that adds them)
 
-Region **US West (Oregon)** → CloudFormation → **Create stack** → *With new resources (standard)*
-→ upload `infra/web.yaml` → stack name `overloader-web` → defaults → tick the IAM box → Submit. It
-creates the bucket (readable only from Cloudflare's addresses) and lets the deploy role upload to
-it. The **WebsiteOrigin** output goes into the Worker in step 10.
+Merging the change that added automatic deploys triggers both workflows, so these two come first
+(from the branch's files):
+
+1. **Update `overloader-registry`**: CloudFormation → the stack → **Update** → *Replace existing
+   template* → `infra/registry.yaml` → keep the defaults → tick the IAM box → Submit. It adds
+   `overloader-cfn-deploy` and `overloader-api-exec` and lets GitHub start api-stack updates.
+2. **Create `overloader-web`**: *Create stack → With new resources (standard)* → `infra/web.yaml`
+   → defaults → tick the IAM box → Submit. The **WebsiteOrigin** output goes into the Worker in
+   step 10.
+
+The first automatic api deploy after the merge moves the function to `overloader-api-exec` and
+removes the old `overloader-api-role` (a one-time cleanup permission in the registry stack allows
+exactly that; it can be deleted afterwards).
 
 ### 9. Resend: a sending domain
 
@@ -178,7 +196,7 @@ CloudFormation → `overloader-api` → **Update** → *Replace existing templat
 
 | Parameter | Value |
 | --- | --- |
-| ImageTag | **the tag that's live now** (Lambda console → overloader-api → Image) |
+| ImageTag | leave as is (the deploys keep it current) |
 | OriginSecret | from `new_secret.py` (step 10) |
 | ResendApiKey | the key from step 9 |
 | SigninEmailFrom | `Overloader <signin@send.hiregrant.today>` |
@@ -196,13 +214,17 @@ Claude sets the repository variable `APP_URL` = `https://overloader.hiregrant.to
 
 ## Day to day
 
-- **Deploy:** Actions → deploy-api (the API) or deploy-web (the app) → Run workflow. (Deploying automatically on push to `main` can
-  be switched on later.)
-- **Stack updates** (secrets, memory, kill switch): CloudFormation → `overloader-api` → Update →
-  *Use existing template*. Leave secret parameters as they are unless changing them, and set
-  **ImageTag to the tag that's live now** (Lambda console → the function → Image), otherwise the
-  update rolls the code back to the tag the stack last had.
+- **Deploy:** push to `main` (backend → API, frontend → app). Or Actions → deploy-api /
+  deploy-web → Run workflow.
+- **Changing a secret or setting** (memory, kill switch, Resend key): CloudFormation →
+  `overloader-api` → Update → *Use existing template*, change just that parameter, leave the rest
+  (ImageTag included; deploys keep it current). Template changes in `infra/api.yaml` go out with
+  the next API deploy on their own.
+- **Changing the Worker:** paste `cloudflare/edge/worker.js` into the dashboard again and Deploy
+  (not automated; it rarely changes).
 - **Kill switch:** update the stack with `ApiEnabled=false`. Reserved concurrency goes to 0 and every
   request gets a free 429. Set it back to `true` to re-enable.
-- **Rollback:** Lambda console → the function → Deploy new image → pick an older tag in ECR (the
-  last 10 are kept).
+- **Rollback:** Actions → deploy-api → Run workflow → put an older commit in **image_tag** (any
+  of the 10 newest images in ECR). It skips the build and migrations and deploys that image
+  through the stack, so nothing drifts. Or revert the commit on `main` and push. (Migrations
+  aren't undone; they're written to keep older code working.)

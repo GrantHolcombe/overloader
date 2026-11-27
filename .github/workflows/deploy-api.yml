@@ -1,15 +1,27 @@
 name: deploy-api
 
-# Builds the API image, pushes it to ECR, migrates the production database, and points the Lambda
-# function at the new image. Manual for now ("Run workflow" on main); deploying on every push to
-# main can be switched on once the first deploys have gone well. See infra/README.md.
+# Builds the API image, pushes it to ECR, migrates the production database, then deploys the api
+# CloudFormation stack with ImageTag = this commit. Every other stack parameter (the secrets too)
+# keeps its value, so nothing is typed in the console and the stack always matches what's
+# running. Runs on every push to main that touches the API, or by hand ("Run workflow").
+# See infra/README.md.
 on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - infra/api.yaml
+      - .github/workflows/deploy-api.yml
   workflow_dispatch:
     inputs:
       migrate:
-        description: Run database migrations and the catalog sync before switching the function
+        description: Run database migrations and the catalog sync before deploying
         type: boolean
         default: true
+      image_tag:
+        description: "Rollback: deploy this existing image (a commit SHA in ECR) instead of building. Skips migrations."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -21,6 +33,7 @@ concurrency:
 
 env:
   AWS_REGION: us-west-2
+  STACK: overloader-api
   FUNCTION: overloader-api
   REPOSITORY: overloader-api
 
@@ -43,19 +56,30 @@ jobs:
 
       - name: Build and push the image
         id: image
+        env:
+          ROLLBACK_TAG: ${{ inputs.image_tag }}
         run: |
-          uri="${{ steps.ecr.outputs.registry }}/$REPOSITORY:$GITHUB_SHA"
-          if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$GITHUB_SHA" >/dev/null 2>&1; then
-            echo "Image for $GITHUB_SHA already pushed; reusing it."
+          if [ -n "$ROLLBACK_TAG" ]; then
+            # Rollback: the image must already be in ECR; nothing is built.
+            aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$ROLLBACK_TAG" >/dev/null \
+              || { echo "No image tagged $ROLLBACK_TAG in ECR"; exit 1; }
+            tag="$ROLLBACK_TAG"
           else
-            # --provenance=false: Lambda needs a plain image manifest, not an attestation index.
-            docker buildx build --platform linux/arm64 --provenance=false -t "$uri" --push backend
+            tag="$GITHUB_SHA"
+            uri="${{ steps.ecr.outputs.registry }}/$REPOSITORY:$tag"
+            if aws ecr describe-images --repository-name "$REPOSITORY" --image-ids imageTag="$tag" >/dev/null 2>&1; then
+              echo "Image for $tag already pushed; reusing it."
+            else
+              # --provenance=false: Lambda needs a plain image manifest, not an attestation index.
+              docker buildx build --platform linux/arm64 --provenance=false -t "$uri" --push backend
+            fi
           fi
-          echo "uri=$uri" >> "$GITHUB_OUTPUT"
-          echo "Image tag (use as ImageTag in the api stack): \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "uri=${{ steps.ecr.outputs.registry }}/$REPOSITORY:$tag" >> "$GITHUB_OUTPUT"
 
       - name: Migrate and sync the catalog
-        if: inputs.migrate
+        # Always on push; optional when run by hand; never for a rollback.
+        if: inputs.image_tag == '' && (github.event_name == 'push' || inputs.migrate)
         env:
           # The owner's DIRECT (non-pooler) connection string; migrations need it, the API doesn't.
           MIGRATE_DATABASE_URL: ${{ secrets.MIGRATE_DATABASE_URL }}
@@ -65,22 +89,22 @@ jobs:
           run alembic upgrade head
           run python -m app.catalog --apply
 
-      - name: Point the function at the new image
-        id: deploy
+      - name: Deploy the stack
         run: |
-          if ! aws lambda get-function --function-name "$FUNCTION" >/dev/null 2>&1; then
-            echo "No $FUNCTION function yet: create the api stack with ImageTag=$GITHUB_SHA." | tee -a "$GITHUB_STEP_SUMMARY"
-            echo "deployed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          aws lambda update-function-code --function-name "$FUNCTION" --image-uri "${{ steps.image.outputs.uri }}" --query LastUpdateStatus
-          aws lambda wait function-updated-v2 --function-name "$FUNCTION"
-          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          account=$(aws sts get-caller-identity --query Account --output text)
+          # Only ImageTag changes; `deploy` keeps every other parameter's current value. The
+          # changes are applied by overloader-cfn-deploy (from the registry stack), not by this
+          # role, which has no IAM or Lambda write access of its own.
+          aws cloudformation deploy \
+            --stack-name "$STACK" \
+            --template-file infra/api.yaml \
+            --parameter-overrides ImageTag="${{ steps.image.outputs.tag }}" \
+            --role-arn "arn:aws:iam::${account}:role/overloader-cfn-deploy" \
+            --no-fail-on-empty-changeset
+          echo "Deployed \`${{ steps.image.outputs.tag }}\` (stack $STACK)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke test
-        if: steps.deploy.outputs.deployed == 'true'
         run: |
           url=$(aws lambda get-function-url-config --function-name "$FUNCTION" --query FunctionUrl --output text)
-          for i in 1 2 3; do curl -fsS "${url}api/health" && break; sleep 5; done
-          curl -fsS "${url}api/health" | grep '"ok":true'
-          echo "Deployed \`$GITHUB_SHA\` to $url" >> "$GITHUB_STEP_SUMMARY"
+          for i in 1 2 3; do curl -fsS --max-time 20 "${url}api/health" && break; sleep 5; done
+          curl -fsS --max-time 20 "${url}api/health" | grep '"ok":true'

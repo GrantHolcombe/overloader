@@ -1,8 +1,13 @@
 name: deploy-web
 
-# Builds the PWA and uploads it to the S3 bucket the overloader-edge Worker serves from. Manual
-# for now ("Run workflow" on main). See infra/README.md.
+# Builds the PWA and uploads it to the S3 bucket the overloader-edge Worker serves from. Runs on
+# every push to main that touches the frontend, or by hand ("Run workflow"). See infra/README.md.
 on:
+  push:
+    branches: [main]
+    paths:
+      - frontend/**
+      - .github/workflows/deploy-web.yml
   workflow_dispatch:
 
 permissions:
