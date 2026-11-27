@@ -1,0 +1,62 @@
+name: deploy-web
+
+# Builds the PWA and uploads it to the S3 bucket the overloader-edge Worker serves from. Manual
+# for now ("Run workflow" on main). See infra/README.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # sign in to AWS as overloader-github-deploy
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # Same-origin API: the Worker routes /api to Lambda, so no VITE_API_BASE.
+      - run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload
+        run: |
+          bucket="s3://overloader-web-$(aws sts get-caller-identity --query Account --output text)"
+          # 1. Hashed build files first, cached for a year: their names change when they do.
+          aws s3 sync dist/assets "$bucket/assets" --cache-control "public, max-age=31536000, immutable"
+          # 2. Then everything else, never cached, so a new deploy reaches phones on the next
+          #    load (index.html, the service worker, the manifest, icons). Old hashed files stay,
+          #    so a page that's mid-load when this runs still finds them.
+          aws s3 sync dist "$bucket" --exclude "assets/*" --cache-control "no-cache"
+          aws s3 cp dist/manifest.webmanifest "$bucket/manifest.webmanifest" \
+            --cache-control "no-cache" --content-type "application/manifest+json"
+          echo "Uploaded \`$GITHUB_SHA\` to $bucket" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Smoke test
+        if: vars.APP_URL != ''
+        run: |
+          curl -fsS "${{ vars.APP_URL }}" | grep -q '<div id="app">'
+          curl -fsS "${{ vars.APP_URL }}/exercise/1" | grep -q '<div id="app">'
+          curl -fsS "${{ vars.APP_URL }}/api/health" | grep '"ok":true'
+          echo "Live at ${{ vars.APP_URL }}" >> "$GITHUB_STEP_SUMMARY"

@@ -44,8 +44,10 @@ Parameters:
       403 (except /api/health). Leave empty until Cloudflare is in front.
   ClientIpHeader:
     Type: String
-    Default: cf-connecting-ip
-    Description: Header holding the user's IP behind Cloudflare (for the sign-in rate limit).
+    Default: x-client-ip
+    Description: >-
+      Header holding the user's IP (for the sign-in rate limit). The overloader-edge Worker sets
+      x-client-ip from Cloudflare's CF-Connecting-IP; trust it only with OriginSecret set.
   MemorySize:
     Type: Number
     Default: 512

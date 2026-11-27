@@ -43,7 +43,8 @@ The live task list is the private GitHub Project board. This page is the overvie
   the image, migrate + catalog sync, update the function, smoke test
 - Neon production database and a least-privilege app role (migration `0004`: `overloader_app`;
   migrations run as the owner)
-- Frontend on S3 behind Cloudflare, deployed by GitHub Actions (like hiregrant.today)
+- Frontend on S3 behind Cloudflare, deployed by GitHub Actions: `infra/web.yaml`, the
+  `overloader-edge` Worker and `deploy-web.yml`, at overloader.hiregrant.today until the final domain
 - Resend sending domain, SPF/DKIM
 - Domain and final app name
 - Account deletion and data export

@@ -105,3 +105,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Cloudflare Worker routing
+        run: node ../cloudflare/edge/worker.test.mjs

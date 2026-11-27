@@ -19,6 +19,10 @@
   step-by-step in `infra/README.md`) and `.github/workflows/deploy-api.yml` (manual trigger).
   The API connects to Neon as `overloader_app` (migration 0004), never the owner. Behind
   Cloudflare set `ORIGIN_SECRET` and `CLIENT_IP_HEADER`. Ask Grant before running a deploy.
+- The web app is served by the Cloudflare Worker `overloader-edge` (`cloudflare/edge/worker.js`,
+  pasted into the dashboard) at overloader.hiregrant.today until the final domain: `/api/*` goes to
+  the Lambda Function URL with the origin secret, everything else to the S3 bucket from
+  `infra/web.yaml`. `deploy-web.yml` uploads the build (manual trigger; ask Grant first).
 - Before pushing: `ruff check . && ruff format --check . && pytest` in `backend/` (pytest needs
   `TEST_DATABASE_URL`, a database it may wipe) and `npm test && npm run build` in `frontend/`.
   CI (`.github/workflows/checks.yml`) runs the same.

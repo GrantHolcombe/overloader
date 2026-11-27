@@ -131,20 +131,73 @@ Tick the IAM acknowledgement → **Submit**. The **FunctionUrl** output is the A
 
 ---
 
-## Not working yet (on purpose)
+## The app on the web (temporary hostname)
 
-- **Sign-in emails:** with no `ResendApiKey`, asking for a code returns a 502. That needs the
-  domain and the Resend sending domain (their own board cards), then a stack update with the key
-  and `SigninEmailFrom`.
-- **Cloudflare in front:** once there's a domain, route it to the Function URL, have Cloudflare add
-  an `X-Origin-Verify` header, and update the stack with the same value as `OriginSecret` so direct
-  calls to the Function URL get a 403. `ClientIpHeader` (`cf-connecting-ip`) then gives the sign-in
-  rate limit each user's real address.
-- **The frontend** isn't hosted yet (S3 + Cloudflare card); set `CorsOrigins` when it is.
+Until the app has its final name and domain it lives at **https://overloader.hiregrant.today**, a
+subdomain of an existing Cloudflare zone. Moving later means a new DNS record and Worker route,
+and new Resend domain; the bucket and stacks don't change.
+
+```
+phone --HTTPS--> Cloudflare (overloader.hiregrant.today)
+                   Worker "overloader-edge"  (cloudflare/edge/worker.js)
+                     /api/*  -> Lambda Function URL  (+ X-Origin-Verify secret, X-Client-IP)
+                     else    -> S3 bucket overloader-web-<account> (website endpoint, Cloudflare IPs only)
+```
+
+### 8. 🧑 AWS: the web stack
+
+Region **US West (Oregon)** → CloudFormation → **Create stack** → *With new resources (standard)*
+→ upload `infra/web.yaml` → stack name `overloader-web` → defaults → tick the IAM box → Submit. It
+creates the bucket (readable only from Cloudflare's addresses) and lets the deploy role upload to
+it. The **WebsiteOrigin** output goes into the Worker in step 10.
+
+### 9. Resend: a sending domain
+
+Claude adds `send.hiregrant.today` to the Resend account (1 of 3 domains used) and its DNS
+records to the `hiregrant.today` zone in Cloudflare (**DNS only**, grey cloud), then checks it
+verifies. A subdomain keeps these emails apart from Google Workspace mail on the main domain.
+
+🧑 Then in Resend → **API Keys** → *Create*: name `overloader-api`, permission **Sending access**,
+domain `send.hiregrant.today`. Copy it only when step 11 is open (it goes straight into the stack).
+
+### 10. Cloudflare: DNS record and Worker
+
+- DNS for `hiregrant.today`: `AAAA overloader 100::`, **Proxied**. The address is a placeholder;
+  the Worker answers every request.
+- Workers & Pages → *Create* → Worker `overloader-edge` → paste `cloudflare/edge/worker.js` →
+  Deploy. **Settings → Domains & Routes**: route `overloader.hiregrant.today/*`, zone
+  `hiregrant.today`. **Variables**: `API_ORIGIN` = the api stack's FunctionUrl, `SITE_ORIGIN` =
+  the web stack's WebsiteOrigin (plain text).
+- 🧑 The shared secret: run `.venv\Scripts\python scripts
+ew_secret.py` in `backend/`, paste it
+  into the Worker as a **Secret** named `ORIGIN_SECRET` *and* into step 11's **OriginSecret**,
+  then press Enter (clears the clipboard).
+
+### 11. 🧑 AWS: update the api stack
+
+CloudFormation → `overloader-api` → **Update** → *Replace existing template* → `infra/api.yaml`:
+
+| Parameter | Value |
+| --- | --- |
+| ImageTag | **the tag that's live now** (Lambda console → overloader-api → Image) |
+| OriginSecret | from `new_secret.py` (step 10) |
+| ResendApiKey | the key from step 9 |
+| SigninEmailFrom | `Overloader <signin@send.hiregrant.today>` |
+| ClientIpHeader | `x-client-ip` (the Worker sets it) |
+| DatabaseUrl, JwtSecret | leave as they are |
+
+After this the Function URL answers only requests that came through the Worker (except
+`/api/health`).
+
+### 12. Deploy the frontend and try it
+
+Claude sets the repository variable `APP_URL` = `https://overloader.hiregrant.today` and runs
+**deploy-web** (asks first). Then open the site on your phone, sign in with your own email, and
+**Add to Home Screen**.
 
 ## Day to day
 
-- **Deploy:** Actions → deploy-api → Run workflow. (Deploying automatically on push to `main` can
+- **Deploy:** Actions → deploy-api (the API) or deploy-web (the app) → Run workflow. (Deploying automatically on push to `main` can
   be switched on later.)
 - **Stack updates** (secrets, memory, kill switch): CloudFormation → `overloader-api` → Update →
   *Use existing template*. Leave secret parameters as they are unless changing them, and set
