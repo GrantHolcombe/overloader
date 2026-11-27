@@ -94,7 +94,8 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub ${LogGroup.Arn}:*
+                # The log group's ARN already ends in ":*", which covers its log streams.
+                Resource: !GetAtt LogGroup.Arn
 
   Function:
     Type: AWS::Lambda::Function
