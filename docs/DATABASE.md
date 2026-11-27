@@ -75,6 +75,11 @@ erDiagram
   it was entered in, so switching the display unit never rewrites history; the app converts for
   charts. Index `(user_id, exercise_id, performed_at)` serves the history, chart and "last time"
   queries.
+- **Roles** (migration `0004`): the API connects as `overloader_app`, which can select, insert,
+  update and delete rows in the app's tables and use their sequences, and nothing else (no schema
+  changes, no `alembic_version`). Later tables get the same grants through default privileges.
+  Migrations and the catalog sync run as the owner (`neondb_owner`). The role is created without a
+  password; it's set per database with `\password overloader_app` (see `infra/README.md`).
 - **log_set** (migration `0003`): per-set detail. A *quick* entry has no rows here (every set is
   the same weight × reps). A *per-set* entry has one row per set, and its `log_entry` weight /
   reps / sets become a summary the API maintains: the heaviest set's weight and reps (the first

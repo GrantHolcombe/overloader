@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Overloader API: the FastAPI container image on Lambda (Lambda Web Adapter, ARM64) behind a
+  Function URL. Stack 2 of 2; deploy in us-west-2 after registry.yaml and after the first image is
+  pushed. Secrets are NoEcho parameters you type in the console; they never go in git or chat.
+  See infra/README.md.
+
+Parameters:
+  ImageTag:
+    Type: String
+    Description: >-
+      Git commit of the image to run (the deploy workflow prints it). On later stack updates use
+      the tag that's live now (Lambda console > Image), or the update rolls the code back.
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: >-
+      Neon production connection string for the overloader_app role (pooled host,
+      ?sslmode=require). Not the owner.
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: A new long random string for production (not the dev one).
+  ResendApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Resend API key. Empty means sign-in emails can't be sent yet (requests get a 502).
+  SigninEmailFrom:
+    Type: String
+    Default: "Overloader <signin@example.com>"
+    Description: Sender for sign-in codes, on a domain verified in Resend.
+  CorsOrigins:
+    Type: String
+    Default: ""
+    Description: Comma-separated browser origins of the frontend, e.g. https://overloader.example
+  OriginSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: >-
+      Value Cloudflare adds as the X-Origin-Verify header. When set, requests without it get a
+      403 (except /api/health). Leave empty until Cloudflare is in front.
+  ClientIpHeader:
+    Type: String
+    Default: cf-connecting-ip
+    Description: Header holding the user's IP behind Cloudflare (for the sign-in rate limit).
+  MemorySize:
+    Type: Number
+    Default: 512
+    AllowedValues: [256, 512, 1024]
+  ReservedConcurrency:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 50
+    Description: Most copies of the function that can run at once (a cap on runaway traffic and cost).
+  ApiEnabled:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: >-
+      Kill switch. "false" sets reserved concurrency to 0, so every request gets a free 429.
+
+Conditions:
+  Enabled: !Equals [!Ref ApiEnabled, "true"]
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/overloader-api
+      RetentionInDays: 30
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: overloader-api-role
+      Description: The Overloader API function. Writes its own logs and nothing else.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: overloader-api-logs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub ${LogGroup.Arn}:*
+
+  Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: overloader-api
+      Description: Overloader API (FastAPI in a container, Lambda Web Adapter)
+      PackageType: Image
+      Code:
+        ImageUri: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/overloader-api:${ImageTag}
+      Architectures: [arm64]
+      MemorySize: !Ref MemorySize
+      # Includes a cold start (pulling the image, starting uvicorn, the readiness check).
+      Timeout: 15
+      Role: !GetAtt ExecutionRole.Arn
+      ReservedConcurrentExecutions: !If [Enabled, !Ref ReservedConcurrency, 0]
+      LoggingConfig:
+        LogGroup: !Ref LogGroup
+      Environment:
+        Variables:
+          ENV: production
+          DATABASE_URL: !Ref DatabaseUrl
+          JWT_SECRET: !Ref JwtSecret
+          RESEND_API_KEY: !Ref ResendApiKey
+          SIGNIN_EMAIL_FROM: !Ref SigninEmailFrom
+          CORS_ORIGINS: !Ref CorsOrigins
+          ORIGIN_SECRET: !Ref OriginSecret
+          CLIENT_IP_HEADER: !Ref ClientIpHeader
+
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt Function.Arn
+      # Open to anyone, like the hiregrant contact form: the API checks sign-in itself, and
+      # ORIGIN_SECRET can restrict it to Cloudflare. CORS is handled by the app.
+      AuthType: NONE
+
+  # A public Function URL needs both permissions.
+  PublicUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  PublicInvokeViaUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref Function
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+Outputs:
+  FunctionUrl:
+    Description: The API's public address (put Cloudflare in front of it later).
+    Value: !GetAtt FunctionUrl.FunctionUrl

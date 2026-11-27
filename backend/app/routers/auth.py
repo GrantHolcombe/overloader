@@ -17,7 +17,7 @@ log = logging.getLogger("overloader.auth")
 def request_code(body: CodeRequest, request: Request, db: DB) -> dict:
     """Emails a sign-in code. Same answer whether or not the address has an account."""
     email = auth.normalize(body.email)
-    ip = request.client.host if request.client else None
+    ip = auth.client_ip(request)
     if auth.rate_limited(db, email, ip):
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
