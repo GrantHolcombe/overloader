@@ -168,8 +168,7 @@ domain `send.hiregrant.today`. Copy it only when step 11 is open (it goes straig
   Deploy. **Settings → Domains & Routes**: route `overloader.hiregrant.today/*`, zone
   `hiregrant.today`. **Variables**: `API_ORIGIN` = the api stack's FunctionUrl, `SITE_ORIGIN` =
   the web stack's WebsiteOrigin (plain text).
-- 🧑 The shared secret: run `.venv\Scripts\python scripts
-ew_secret.py` in `backend/`, paste it
+- 🧑 The shared secret: run `.venv\Scripts\python scripts\new_secret.py` in `backend/`, paste it
   into the Worker as a **Secret** named `ORIGIN_SECRET` *and* into step 11's **OriginSecret**,
   then press Enter (clears the clipboard).
 
