@@ -60,6 +60,11 @@ AWS console as root → region **US West (Oregon) us-west-2** → CloudFormation
 defaults → tick *I acknowledge that AWS CloudFormation might create IAM resources with custom
 names* → **Submit**.
 
+**Already created it before 2026-11-27?** Update it (CloudFormation → `overloader-registry` →
+Update → *Replace existing template* → upload `registry.yaml`, keep the defaults, tick the IAM
+box). The first version trusted `repo:GrantHolcombe/overloader`, but GitHub signs this repo in
+with its immutable IDs (`repo:GrantHolcombe@8533071/overloader@1473704173`), so AWS refused it.
+
 When it's done, copy the **DeployRoleArn** output and set it as a repository *variable* (not
 secret; an ARN isn't sensitive). Claude can do this once the stack exists:
 

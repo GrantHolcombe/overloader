@@ -4,10 +4,13 @@ Description: >-
   deploy them. Stack 1 of 2; deploy in us-west-2 before api.yaml. See infra/README.md.
 
 Parameters:
-  GitHubRepo:
+  GitHubSubjectPrefix:
     Type: String
-    Default: GrantHolcombe/overloader
-    Description: owner/name of the repository allowed to deploy (main branch only).
+    Default: repo:GrantHolcombe@8533071/overloader@1473704173
+    Description: >-
+      The repository's OIDC subject prefix (gh api repos/OWNER/REPO/actions/oidc/customization/sub).
+      Newer repos use immutable IDs (owner@id/name@id), which also stop a recreated repo with the
+      same name from using this role. Only its main branch may deploy.
   FunctionName:
     Type: String
     Default: overloader-api
@@ -67,7 +70,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/main
+                token.actions.githubusercontent.com:sub: !Sub ${GitHubSubjectPrefix}:ref:refs/heads/main
       Policies:
         - PolicyName: overloader-deploy
           PolicyDocument:
