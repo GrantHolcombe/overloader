@@ -30,6 +30,9 @@ assert.ok(calls.at(-1).init.body);
 // Site: files served, app routes get index.html with 200, missing assets stay 404.
 r = await worker.fetch(req("/assets/app-1.js"), env);
 assert.equal(r.status, 200); assert.equal(await r.text(), "js");
+assert.notEqual(r.headers.get("cache-control"), "no-cache"); // hashed assets keep their caching
+r = await worker.fetch(req("/index.html"), env);
+assert.equal(r.headers.get("cache-control"), "no-cache"); // the app shell is always revalidated
 r = await worker.fetch(req("/exercise/56"), env);
 assert.equal(r.status, 200); assert.match(await r.text(), /id="app"/);
 assert.equal(r.headers.get("x-content-type-options"), "nosniff");

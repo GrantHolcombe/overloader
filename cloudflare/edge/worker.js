@@ -71,6 +71,10 @@ async function serveSite(request, url, env) {
   }
   const out = new Response(res.body, res);
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) out.headers.set(name, value);
+  // Only the hashed build files under /assets/ may be cached. Everything else (index.html, the
+  // service worker, the manifest, icons) must be revalidated, or app updates get stuck on
+  // phones. Set here because the zone's Browser Cache TTL otherwise replaces S3's no-cache.
+  if (!url.pathname.startsWith("/assets/")) out.headers.set("Cache-Control", "no-cache");
   return out;
 }
 
