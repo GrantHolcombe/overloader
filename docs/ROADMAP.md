@@ -28,7 +28,18 @@ The live task list is the private GitHub Project board. This page is the overvie
 
 ## Phase 2: Ship it
 
-- Pick the API host (candidates: AWS Lambda via Mangum, App Runner/Fargate, Fly.io, Render)
+- [x] Pick the API host (decided 2026-11-26): **AWS Lambda running the API as a container image**
+      (Lambda Web Adapter + uvicorn, ARM64, in us-west-2 next to Neon) behind a **Lambda Function
+      URL**, with Cloudflare in front. About $0/month at this scale. The same image can move to
+      Fargate or Fly.io later without code changes. Priced and set aside: Fargate (~$11/month, or
+      ~$35 with a load balancer), App Runner (closed to new customers since April 30, 2026),
+      Fly.io (~$2-4/month).
+- Dockerfile for the API (Lambda Web Adapter, runs the same locally and on Lambda)
+- AWS stack as code: ECR repo, Lambda (image, ARM64), Function URL, logs-only role, SSM
+  parameters for secrets, reserved-concurrency cap, log retention
+- GitHub Actions deploy: OIDC role, build and push the image, update the function, run
+  migrations and the catalog sync
+- Neon production database and a least-privilege app role (migrations run as the owner)
 - Frontend on S3 behind Cloudflare, deployed by GitHub Actions (like hiregrant.today)
 - Resend sending domain, SPF/DKIM
 - Domain and final app name

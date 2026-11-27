@@ -26,6 +26,28 @@ Carried over from [Setups.Bike](https://github.com/GrantHolcombe/setups.bike):
 
 ---
 
+## 2026-11-26: Containers, but at Lambda prices
+
+**Situation:** Time to choose where the FastAPI server runs. Containers appealed to me for the
+portfolio, so I had the agent price ECS/Fargate from AWS's current price list.
+
+**Decision:**
+- **Not Fargate, for now.** About $11/month at minimum, or about $35 with a load balancer, for an
+  app with no users yet.
+- **I asked whether launching on Lambda would lock us in,** and for cheaper container hosts.
+  Checking those turned up that App Runner closed to new customers in April 2026, and Fly.io
+  would run about $2-4/month.
+- **Lambda running the API as a container image,** behind a Function URL with Cloudflare in front,
+  like my contact form. FastAPI stays exactly as it is; one Docker image runs on my machine, on
+  Lambda today, and on Fargate or Fly.io later if traffic ever justifies an always-on server.
+
+**Why:** It gets the container work (Dockerfile, registry, image builds in CI) into the portfolio
+at about $0/month, keeps everything in the AWS account I already manage, and leaves the move to
+"real" containers a deploy change rather than a rewrite. The cost is a cold start of a second or
+two after idle time, which is fine for a lifting log.
+
+---
+
 ## 2026-11-26: Personal custom exercises, and a catalog I can edit as feedback comes in
 
 **Situation:** Before starting custom exercises, I checked two things: whether they'd be shared
