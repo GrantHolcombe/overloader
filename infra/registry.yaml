@@ -118,6 +118,12 @@ Resources:
                   - cloudformation:DescribeStacks
                   - cloudformation:DescribeStackEvents
                 Resource: !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApiStackName}/*
+              # Read-only: `aws cloudformation deploy` checks the template's parameters first.
+              # It doesn't support resource-level scoping when given a template body.
+              - Sid: ReadTemplateParameters
+                Effect: Allow
+                Action: cloudformation:GetTemplateSummary
+                Resource: "*"
               - Sid: HandTheStackToTheServiceRole
                 Effect: Allow
                 Action: iam:PassRole
