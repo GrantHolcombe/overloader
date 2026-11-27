@@ -38,6 +38,58 @@ jobs:
       - run: ruff check . && ruff format --check .
       - run: pytest -q
 
+  image:
+    # Builds the API's container image natively on ARM64 (what Lambda will run), then uses it
+    # the way a deploy will: migrate, sync the catalog, start the server, call it.
+    runs-on: ubuntu-24.04-arm
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: overloader_smoke
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      IMAGE: overloader-api:ci
+      RUN: >-
+        docker run --rm --network host
+        -e DATABASE_URL=postgresql://postgres:postgres@localhost:5432/overloader_smoke
+        -e JWT_SECRET=ci-only-secret-not-used-anywhere-else
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build -t "$IMAGE" backend
+      - name: Image facts
+        run: |
+          docker image inspect "$IMAGE" --format 'arch={{.Architecture}} size={{.Size}}'
+          docker run --rm "$IMAGE" sh -c 'id -un; ls -l /opt/extensions; python --version'
+          docker run --rm "$IMAGE" cat /venv/installed.txt
+      - name: Refuses to start without a real secret
+        run: |
+          if docker run --rm -e ENV=production "$IMAGE" python -c "import app.main"; then
+            echo "expected the app to refuse the default JWT secret"; exit 1
+          fi
+      - name: Migrate and sync the catalog
+        run: |
+          $RUN "$IMAGE" alembic upgrade head
+          $RUN "$IMAGE" python -m app.catalog --apply
+          $RUN "$IMAGE" python -m app.catalog | grep "already matches"
+      - name: Serve and call it
+        run: |
+          $RUN -d --name api -e ENV=dev "$IMAGE"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/api/health | grep '"ok":true'
+          curl -fsS -X POST http://127.0.0.1:8080/api/auth/request-code \
+            -H 'Content-Type: application/json' -d '{"email":"smoke@example.com"}' | grep '"sent":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/me)" = 401
+      - name: Server log
+        if: always()
+        run: docker logs api || true
+
   web:
     runs-on: ubuntu-latest
     defaults:

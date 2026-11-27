@@ -1,0 +1,13 @@
+# Keep secrets, local environments and build junk out of the image.
+.env
+.env.*
+.venv/
+.localdb/
+**/__pycache__/
+**/*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+tests/
+Dockerfile
+.dockerignore
